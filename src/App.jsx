@@ -3,6 +3,7 @@ import QuestionCard from "./components/QuestionCard";
 import AnswerInput from "./components/AnswerInput";
 import ExplanationPanel from "./components/ExplanationPanel";
 import ShareCard from "./components/ShareCard";
+import AuthButton from "./components/AuthButton";
 import { useAI } from "./hooks/useAI";
 import { parsePdf, PdfParseError } from "./lib/pdfParser";
 
@@ -193,6 +194,7 @@ export default function CertPassAI() {
           <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#888" }}>
             <span>🔥 {correctCount}문제 정답</span>
             <span style={{ color: "#cc785c" }}>오답 {wrongAnswers.length}개</span>
+            <AuthButton />
           </div>
         </div>
       </header>
@@ -312,7 +314,7 @@ export default function CertPassAI() {
                   <ShareCard correctCount={correctCount} wrongAnswers={wrongAnswers} />
                 </div>
 
-                {wrongAnswers.map((w) => (
+a                {wrongAnswers.map((w) => (
                   <div key={w.id} style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #f8717122" }}>
                     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                       <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>{w.subject}</span>
