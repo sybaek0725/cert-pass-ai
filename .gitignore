@@ -11,6 +11,17 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+
+# 로컬 전용 설계 문서 (Notion에서 관리)
+/CLAUDE.md
+/기획.md
+/설계.md
+/사용자가이드.md
+/브랜치전략.md
+/보안체크리스트.md
+/cdn.md
+/CertPassAI.jsx
 
 # Editor directories and files
 .vscode/*
