@@ -79,11 +79,10 @@ export default function CertPassAI() {
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfStatus, setPdfStatus] = useState("");
+  const [retryMode, setRetryMode] = useState(false);
   const fileInputRef = useRef(null);
 
-  const current = questions[currentIdx];
-  const isCorrect = submitted && userAnswer.trim().includes(current?.answer?.split("(")[0].trim());
-
+  const retryPool = wrongAnswers.filter((w) => !w.reviewed);
   const filteredQuestions = selectedSubject === "all"
     ? questions
     : questions.filter((q) => {
@@ -97,6 +96,29 @@ export default function CertPassAI() {
         return q.subject === map[selectedSubject];
       });
 
+  const current = retryMode ? retryPool[0] : questions[currentIdx];
+  const isCorrect = submitted && userAnswer.trim().includes(current?.answer?.split("(")[0].trim());
+
+  function resetQuestionState() {
+    setUserAnswer("");
+    setSubmitted(false);
+    setShowHint(false);
+    setShowExplanation(false);
+    setAiExplanation("");
+  }
+
+  function enterRetryMode() {
+    if (retryPool.length === 0) return;
+    setRetryMode(true);
+    setTab("study");
+    resetQuestionState();
+  }
+
+  function exitRetryMode() {
+    setRetryMode(false);
+    resetQuestionState();
+  }
+
   async function handleSubmit() {
     if (!userAnswer.trim()) return;
     setSubmitted(true);
@@ -104,7 +126,8 @@ export default function CertPassAI() {
     const correct = userAnswer.trim().includes(current.answer.split("(")[0].trim());
     if (correct) {
       setCorrectCount((c) => c + 1);
-    } else {
+      if (retryMode) markReviewed(current.id);
+    } else if (!retryMode) {
       addWrong(current, userAnswer);
     }
 
@@ -129,14 +152,14 @@ export default function CertPassAI() {
   }
 
   function handleNext() {
+    if (retryMode) {
+      resetQuestionState();
+      return;
+    }
     const pool = filteredQuestions;
     const nextIdx = questions.indexOf(pool[(pool.indexOf(current) + 1) % pool.length]);
     setCurrentIdx(nextIdx === -1 ? 0 : nextIdx);
-    setUserAnswer("");
-    setSubmitted(false);
-    setShowHint(false);
-    setShowExplanation(false);
-    setAiExplanation("");
+    resetQuestionState();
   }
 
   async function handlePdfUpload(e) {
@@ -223,9 +246,36 @@ export default function CertPassAI() {
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
 
         {/* ── 문제풀기 탭 ── */}
+        {tab === "study" && retryMode && retryPool.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
+            <p style={{ fontSize: 40 }}>🎉</p>
+            <p style={{ fontSize: 16, color: "#888", marginTop: 12 }}>오답 복습 완료!</p>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>모든 오답을 다시 풀었어요.</p>
+            <button
+              onClick={exitRetryMode}
+              style={{ marginTop: 16, padding: "8px 18px", borderRadius: 8, fontSize: 13, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
+            >
+              일반 모드로 돌아가기
+            </button>
+          </div>
+        )}
         {tab === "study" && current && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* 과목 필터 */}
+            {retryMode && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 10, backgroundColor: "#cc785c11", border: "1px solid #cc785c44" }}>
+                <span style={{ fontSize: 13, color: "#e8906f", fontWeight: 600 }}>
+                  🔁 오답 복습 모드 · {retryPool.length}개 남음
+                </span>
+                <button
+                  onClick={exitRetryMode}
+                  style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
+                >
+                  종료
+                </button>
+              </div>
+            )}
+            {/* 과목 필터 (일반 모드에서만) */}
+            {!retryMode && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {SUBJECTS.map((s) => (
                 <button
@@ -246,10 +296,15 @@ export default function CertPassAI() {
                 </button>
               ))}
             </div>
+            )}
 
             {/* 진행률 */}
             <div style={{ fontSize: 12, color: "#555", display: "flex", justifyContent: "space-between" }}>
-              <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
+              {retryMode ? (
+                <span>복습 진행: {wrongAnswers.length - retryPool.length} / {wrongAnswers.length}</span>
+              ) : (
+                <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
+              )}
               <span style={{ color: "#4ade80" }}>정답률 {questions.length > 0 ? Math.round((correctCount / Math.max(currentIdx, 1)) * 100) : 0}%</span>
             </div>
 
@@ -298,8 +353,18 @@ export default function CertPassAI() {
               </div>
             ) : (
               <>
-                <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>
-                  총 {wrongAnswers.length}개의 오답 · 복습이 필요해요
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 13, color: "#666" }}>
+                    총 {wrongAnswers.length}개의 오답 · {retryPool.length}개 미복습
+                  </span>
+                  {retryPool.length > 0 && (
+                    <button
+                      onClick={enterRetryMode}
+                      style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff" }}
+                    >
+                      🔁 오답만 다시 풀기 ({retryPool.length})
+                    </button>
+                  )}
                 </div>
 
                 <div style={{ marginTop: 8, marginBottom: 12 }}>
