@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import QuestionCard from "./components/QuestionCard";
 import AnswerInput from "./components/AnswerInput";
 import ExplanationPanel from "./components/ExplanationPanel";
+import ShareCard from "./components/ShareCard";
 import { useAI } from "./hooks/useAI";
 import { parsePdf, PdfParseError } from "./lib/pdfParser";
 
@@ -306,6 +307,11 @@ export default function CertPassAI() {
                 <div style={{ fontSize: 13, color: "#666", marginBottom: 4 }}>
                   총 {wrongAnswers.length}개의 오답 · 복습이 필요해요
                 </div>
+
+                <div style={{ marginTop: 8, marginBottom: 12 }}>
+                  <ShareCard correctCount={correctCount} wrongAnswers={wrongAnswers} />
+                </div>
+
                 {wrongAnswers.map((w) => (
                   <div key={w.id} style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #f8717122" }}>
                     <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
