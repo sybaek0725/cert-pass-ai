@@ -1,4 +1,7 @@
 import { useState, useRef, useCallback } from "react";
+import QuestionCard from "./components/QuestionCard";
+import AnswerInput from "./components/AnswerInput";
+import ExplanationPanel from "./components/ExplanationPanel";
 
 // ── 색상 토큰 (Claude UI 스타일) ──────────────────────────────
 // bg: #1a1a1a / surface: #262626 / border: #333 / accent: #cc785c
@@ -327,113 +330,25 @@ export default function CertPassAI() {
               <span style={{ color: "#4ade80" }}>정답률 {questions.length > 0 ? Math.round((correctCount / Math.max(currentIdx, 1)) * 100) : 0}%</span>
             </div>
 
-            {/* 문제 카드 */}
-            <div style={{ backgroundColor: "#262626", borderRadius: 12, padding: 24, border: "1px solid #333" }}>
-              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>
-                  {current.subject}
-                </span>
-                <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#cc785c22", color: "#e8906f", border: "1px solid #cc785c44" }}>
-                  {current.type}
-                </span>
-              </div>
+            <QuestionCard question={current} showHint={showHint} />
 
-              <p style={{ fontSize: 15, lineHeight: 1.8, color: "#ddd", whiteSpace: "pre-line", fontFamily: "monospace" }}>
-                {current.question}
-              </p>
+            <AnswerInput
+              value={userAnswer}
+              onChange={setUserAnswer}
+              submitted={submitted}
+              isCorrect={isCorrect}
+              correctAnswer={current.answer}
+              showHint={showHint}
+              onToggleHint={() => setShowHint(!showHint)}
+              onSubmit={handleSubmit}
+              onNext={handleNext}
+            />
 
-              {/* 힌트 */}
-              {showHint && (
-                <div style={{ marginTop: 16, padding: "10px 14px", backgroundColor: "#fbbf2411", borderRadius: 8, border: "1px solid #fbbf2433", fontSize: 13, color: "#fbbf24" }}>
-                  💡 {current.hint}
-                </div>
-              )}
-            </div>
-
-            {/* 답변 입력 */}
-            <div style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: submitted ? (isCorrect ? "1px solid #4ade8055" : "1px solid #f8717155") : "1px solid #333" }}>
-              <label style={{ fontSize: 12, color: "#666", marginBottom: 8, display: "block" }}>내 답변</label>
-              <textarea
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                disabled={submitted}
-                placeholder="답을 입력하세요..."
-                style={{
-                  width: "100%",
-                  minHeight: 80,
-                  backgroundColor: "#1a1a1a",
-                  border: "1px solid #333",
-                  borderRadius: 8,
-                  padding: "10px 12px",
-                  color: "#ececec",
-                  fontSize: 14,
-                  resize: "vertical",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-
-              {submitted && (
-                <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, backgroundColor: isCorrect ? "#4ade8011" : "#f8717111", border: `1px solid ${isCorrect ? "#4ade8044" : "#f8717144"}` }}>
-                  <p style={{ fontSize: 13, color: isCorrect ? "#4ade80" : "#f87171", fontWeight: 600 }}>
-                    {isCorrect ? "✅ 정답입니다!" : "❌ 오답입니다"}
-                  </p>
-                  <p style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
-                    정답: <span style={{ color: "#ececec", fontWeight: 600 }}>{current.answer}</span>
-                  </p>
-                </div>
-              )}
-
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                {!submitted ? (
-                  <>
-                    <button
-                      onClick={() => setShowHint(!showHint)}
-                      style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-                    >
-                      {showHint ? "힌트 숨기기" : "💡 힌트"}
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={!userAnswer.trim()}
-                      style={{
-                        flex: 1, padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-                        backgroundColor: userAnswer.trim() ? "#cc785c" : "#333",
-                        border: "none", color: userAnswer.trim() ? "#fff" : "#555", fontWeight: 600,
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      제출하기
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={handleNext}
-                    style={{ flex: 1, padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
-                  >
-                    다음 문제 →
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* AI 해설 */}
             {showExplanation && (
-              <div style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #333" }}>
-                <p style={{ fontSize: 12, color: "#cc785c", fontWeight: 600, marginBottom: 12 }}>🤖 AI 해설</p>
-                {aiLoading ? (
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", color: "#555", fontSize: 13 }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#cc785c", animation: "pulse 1s infinite" }} />
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#cc785c", animation: "pulse 1s infinite 0.2s" }} />
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#cc785c", animation: "pulse 1s infinite 0.4s" }} />
-                    <span style={{ marginLeft: 4 }}>해설 생성 중...</span>
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 14, color: "#ccc", lineHeight: 1.8, whiteSpace: "pre-line" }}>
-                    {aiExplanation || current.explanation}
-                  </div>
-                )}
-              </div>
+              <ExplanationPanel
+                loading={aiLoading}
+                text={aiExplanation || current.explanation}
+              />
             )}
 
             {/* 키워드 태그 */}
