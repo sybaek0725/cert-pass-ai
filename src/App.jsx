@@ -206,9 +206,9 @@ export default function CertPassAI() {
             <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.3px" }}>CertPass AI</span>
             <span style={{ fontSize: 11, color: "#666", marginLeft: 4, padding: "2px 6px", backgroundColor: "#262626", borderRadius: 4, border: "1px solid #333" }}>정처기 실기</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#888" }}>
-            <span>🔥 {correctCount}문제 정답</span>
-            <span style={{ color: "#cc785c" }}>오답 {wrongAnswers.length}개</span>
+          <div className="cp-header-stats" style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#888" }}>
+            <span className="cp-only-desktop">🔥 {correctCount}문제 정답</span>
+            <span style={{ color: "#cc785c" }} className="cp-only-desktop">오답 {wrongAnswers.length}개</span>
             <AuthButton />
           </div>
         </div>
@@ -243,7 +243,7 @@ export default function CertPassAI() {
         </div>
       </div>
 
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
+      <main className="cp-main" style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
 
         {/* ── 문제풀기 탭 ── */}
         {tab === "study" && retryMode && retryPool.length === 0 && (

@@ -1,7 +1,7 @@
 export default function QuestionCard({ question, showHint }) {
   if (!question) return null;
   return (
-    <div style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}>
+    <div className="cp-question-card cp-fade-in" style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
           {question.subject}
@@ -11,7 +11,7 @@ export default function QuestionCard({ question, showHint }) {
         </span>
       </div>
 
-      <p style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+      <p className="cp-question-body" style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
         {question.question}
       </p>
 

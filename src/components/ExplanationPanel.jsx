@@ -2,7 +2,7 @@ import ReactMarkdown from 'react-markdown';
 
 export default function ExplanationPanel({ loading, text }) {
   return (
-    <div style={{ backgroundColor: '#262626', borderRadius: 12, padding: 20, border: '1px solid #333' }}>
+    <div className="cp-fade-in" style={{ backgroundColor: '#262626', borderRadius: 12, padding: 20, border: '1px solid #333' }}>
       <p style={{ fontSize: 12, color: '#cc785c', fontWeight: 600, marginBottom: 12 }}>🤖 AI 해설</p>
       {loading ? (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#555', fontSize: 13 }}>

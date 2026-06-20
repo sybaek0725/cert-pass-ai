@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── 로딩 점 ─────────────────────────────────────────── */
 @keyframes cp-pulse {
   0%, 100% { opacity: 0.3; transform: scale(0.8); }
   50% { opacity: 1; transform: scale(1); }
@@ -14,6 +15,8 @@
   background: #cc785c;
   animation: cp-pulse 1s infinite;
 }
+
+/* ── 마크다운 ────────────────────────────────────────── */
 .cp-markdown p { margin: 0 0 8px; }
 .cp-markdown strong { color: #ececec; }
 .cp-markdown code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
@@ -21,6 +24,7 @@
 .cp-markdown ul { padding-left: 18px; margin: 6px 0; }
 .cp-markdown blockquote { border-left: 2px solid #cc785c; padding-left: 10px; color: #fbbf24; margin: 8px 0; }
 
+/* ── 베이스 ──────────────────────────────────────────── */
 html,
 body,
 #root {
@@ -29,4 +33,68 @@ body,
   background: #1a1a1a;
   color: #ececec;
   font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── 인터랙션: 버튼 ─────────────────────────────────── */
+button {
+  font-family: inherit;
+  transition: transform 0.1s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+button:not(:disabled):hover {
+  opacity: 0.92;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+button:disabled {
+  cursor: default;
+}
+
+/* 텍스트입력 포커스 */
+textarea, input {
+  font-family: inherit;
+}
+textarea:focus, input:focus {
+  border-color: #cc785c !important;
+  box-shadow: 0 0 0 2px #cc785c33;
+}
+
+/* ── 카드 페이드 인 ─────────────────────────────────── */
+@keyframes cp-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.cp-fade-in {
+  animation: cp-fade-in 0.18s ease-out both;
+}
+
+/* ── 모바일 (≤ 480px) ────────────────────────────────── */
+@media (max-width: 480px) {
+  /* 헤더 영역 — 우측 카운터 영역 축소 */
+  .cp-header-stats { gap: 6px !important; font-size: 12px !important; }
+  .cp-header-stats > .cp-only-desktop { display: none; }
+
+  /* 탭 라벨 - 이모지만 + 짧게 */
+  .cp-tab-label-text { display: none; }
+
+  /* 메인 패딩 줄이기 */
+  .cp-main { padding: 16px 14px !important; }
+
+  /* 문제 카드 패딩 */
+  .cp-question-card { padding: 18px !important; }
+
+  /* 큰 본문 폰트 사이즈 */
+  .cp-question-body { font-size: 14px !important; line-height: 1.7 !important; }
+}
+
+/* ── 접근성: 키보드 포커스 ─────────────────────────── */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #cc785c;
+  outline-offset: 2px;
 }
