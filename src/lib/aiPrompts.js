@@ -58,7 +58,7 @@ ${question}
 위 학생 답변을 채점하고 형식대로 해설해주세요.`;
 }
 
-// ── 3. Claude API 호출 공통 설정 ──────────────────────────
-// CLAUDE.md 규칙: 모델 claude-sonnet-4-6, max_tokens 1000.
-export const CLAUDE_MODEL = 'claude-sonnet-4-6';
-export const CLAUDE_MAX_TOKENS = 1000;
+// ── 3. AI 호출 공통 설정 ──────────────────────────────────
+// V1: Gemini 2.5 Flash (Vercel Serverless Function 경유, 무료 한도 활용).
+export const AI_MODEL = 'gemini-2.5-flash';
+export const AI_MAX_OUTPUT_TOKENS = 1000;

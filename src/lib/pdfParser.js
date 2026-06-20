@@ -35,7 +35,7 @@ export async function parsePdf(file, { onProgress } = {}) {
   try {
     const arrayBuffer = await file.arrayBuffer();
     pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  } catch (e) {
+  } catch {
     throw new PdfParseError('PDF를 열 수 없습니다. 손상되었거나 비밀번호가 걸려 있을 수 있어요.', 'PARSE_FAILED');
   }
 

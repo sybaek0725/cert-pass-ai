@@ -1,7 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import QuestionCard from "./components/QuestionCard";
 import AnswerInput from "./components/AnswerInput";
 import ExplanationPanel from "./components/ExplanationPanel";
+import { useAI } from "./hooks/useAI";
+import { parsePdf, PdfParseError } from "./lib/pdfParser";
 
 // ── 색상 토큰 (Claude UI 스타일) ──────────────────────────────
 // bg: #1a1a1a / surface: #262626 / border: #333 / accent: #cc785c
@@ -54,73 +56,9 @@ const SAMPLE_QUESTIONS = [
   },
 ];
 
-// ── 컴포넌트 ────────────────────────────────────────────────────
-
-function SubjectBadge({ subject }) {
-  const colors = {
-    데이터베이스: "bg-blue-900/40 text-blue-300 border border-blue-700/40",
-    "소프트웨어 설계": "bg-purple-900/40 text-purple-300 border border-purple-700/40",
-    "소프트웨어 개발": "bg-green-900/40 text-green-300 border border-green-700/40",
-    "프로그래밍 언어": "bg-yellow-900/40 text-yellow-300 border border-yellow-700/40",
-    "시스템 구축관리": "bg-red-900/40 text-red-300 border border-red-700/40",
-  };
-  return (
-    <span className={`text-xs px-2 py-0.5 rounded-full ${colors[subject] || "bg-gray-800 text-gray-400"}`}>
-      {subject}
-    </span>
-  );
-}
-
-function TypeBadge({ type }) {
-  return (
-    <span className="text-xs px-2 py-0.5 rounded-full bg-[#cc785c]/20 text-[#e8906f] border border-[#cc785c]/30">
-      {type}
-    </span>
-  );
-}
-
-function ExplanationView({ text }) {
-  // 간단한 마크다운 렌더링
-  const lines = text.split("\n");
-  return (
-    <div className="text-sm text-[#ccc] leading-relaxed space-y-1">
-      {lines.map((line, i) => {
-        if (line.startsWith("### ")) {
-          return <p key={i} className="font-semibold text-[#ececec] mt-3 mb-1">{line.slice(4)}</p>;
-        }
-        if (line.startsWith("**") && line.endsWith("**")) {
-          return <p key={i} className="font-semibold text-[#ececec]">{line.slice(2, -2)}</p>;
-        }
-        if (line.startsWith("> ")) {
-          return (
-            <div key={i} className="border-l-2 border-[#cc785c] pl-3 text-[#aaa] italic">
-              {line.slice(2)}
-            </div>
-          );
-        }
-        if (line.startsWith("- ")) {
-          return <p key={i} className="ml-3">• {line.slice(2)}</p>;
-        }
-        if (line.startsWith("```")) return null;
-        if (line.trim() === "") return <div key={i} className="h-1" />;
-        // 인라인 볼드
-        const parts = line.split(/(\*\*[^*]+\*\*)/g);
-        return (
-          <p key={i}>
-            {parts.map((part, j) =>
-              part.startsWith("**") && part.endsWith("**")
-                ? <strong key={j} className="text-[#ececec]">{part.slice(2, -2)}</strong>
-                : part
-            )}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── 메인 앱 ────────────────────────────────────────────────────
 export default function CertPassAI() {
+  const ai = useAI();
   const [tab, setTab] = useState("study"); // study | wrong | upload
   const [questions, setQuestions] = useState(SAMPLE_QUESTIONS);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -167,43 +105,24 @@ export default function CertPassAI() {
       });
     }
 
-    // AI 해설 생성
+    // AI 해설 스트리밍 (Vercel Function 프록시 → Gemini)
     setAiLoading(true);
     setShowExplanation(true);
+    setAiExplanation("");
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 1000,
-          messages: [
-            {
-              role: "user",
-              content: `정보처리기사 실기 문제 해설을 해주세요.
-
-문제: ${current.question}
-정답: ${current.answer}
-학생 답변: ${userAnswer}
-정오여부: ${correct ? "정답" : "오답"}
-
-다음 형식으로 해설해주세요:
-1. 정오 판정 및 한줄 피드백
-2. 핵심 개념 설명 (3-5줄)
-3. 시험 TIP (한줄)
-
-간결하고 명확하게 작성해주세요.`,
-            },
-          ],
-        }),
-      });
-      const data = await response.json();
-      const text = data.content?.[0]?.text || current.explanation;
-      setAiExplanation(text);
-    } catch {
-      setAiExplanation(current.explanation);
+      await ai.streamExplanation(
+        {
+          question: current.question,
+          correctAnswer: current.answer,
+          userAnswer,
+        },
+        (accumulated) => setAiExplanation(accumulated)
+      );
+    } catch (e) {
+      setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ""}`);
+    } finally {
+      setAiLoading(false);
     }
-    setAiLoading(false);
   }
 
   function handleNext() {
@@ -217,34 +136,44 @@ export default function CertPassAI() {
     setAiExplanation("");
   }
 
+  // subject 코드(Supabase CHECK enum) → 한글 라벨 (UI에서 사용)
+  const SUBJECT_LABEL = {
+    "sw-design": "소프트웨어 설계",
+    "sw-dev": "소프트웨어 개발",
+    db: "데이터베이스",
+    lang: "프로그래밍 언어",
+    infra: "시스템 구축관리",
+  };
+
   async function handlePdfUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfParsing(true);
     setPdfStatus("PDF 분석 중...");
-
-    // 실제 서비스에서는 pdf.js로 파싱 후 Claude API 호출
-    // 여기서는 시뮬레이션
-    await new Promise((r) => setTimeout(r, 1500));
-    setPdfStatus("AI가 유사 문제 생성 중...");
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // 샘플 생성 문제 추가
-    const newQ = {
-      id: Date.now(),
-      subject: "데이터베이스",
-      type: "단답형",
-      question: "관계형 데이터베이스에서 기본키(Primary Key)의 특징으로 옳지 않은 것은?\n\nPDF에서 생성된 AI 유사 문제입니다.",
-      answer: "NULL 값을 가질 수 있다",
-      hint: "기본키의 제약 조건을 떠올려보세요.",
-      explanation:
-        "기본키는 **NOT NULL**이어야 하며 중복될 수 없습니다.\n\n### 기본키 특징\n- 유일성: 중복 값 불가\n- NOT NULL: 빈 값 불가\n- 최소성: 최소한의 속성으로 구성",
-      keywords: ["기본키", "Primary Key", "무결성"],
-    };
-    setQuestions((prev) => [...prev, newQ]);
-    setPdfStatus(`✅ 완료! ${1}개의 새 문제가 추가되었습니다.`);
-    setPdfParsing(false);
-    setTab("study");
+    try {
+      const { fullText } = await parsePdf(file);
+      setPdfStatus("AI가 유사 문제 생성 중...");
+      const generated = await ai.generateQuestion(fullText);
+      const newQ = {
+        id: Date.now(),
+        subject: SUBJECT_LABEL[generated.subject] || generated.subject,
+        type: generated.type,
+        question: generated.question,
+        answer: generated.answer,
+        hint: generated.hint,
+        explanation: generated.explanation,
+        keywords: generated.keywords || [],
+      };
+      setQuestions((prev) => [...prev, newQ]);
+      setPdfStatus("✅ 완료! 1개의 새 문제가 추가되었습니다.");
+      setTab("study");
+    } catch (err) {
+      const msg = err instanceof PdfParseError ? err.message : err.message || "처리 중 오류가 발생했습니다.";
+      setPdfStatus(`❌ ${msg}`);
+    } finally {
+      setPdfParsing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   }
 
   // ── 렌더 ──────────────────────────────────────────────────────
@@ -283,7 +212,6 @@ export default function CertPassAI() {
                 fontSize: 13,
                 fontWeight: tab === t.id ? 600 : 400,
                 color: tab === t.id ? "#cc785c" : "#666",
-                borderBottom: tab === t.id ? "2px solid #cc785c" : "2px solid transparent",
                 background: "none",
                 border: "none",
                 borderBottom: tab === t.id ? "2px solid #cc785c" : "2px solid transparent",
