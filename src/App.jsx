@@ -5,7 +5,10 @@ import ExplanationPanel from "./components/ExplanationPanel";
 import ShareCard from "./components/ShareCard";
 import AuthButton from "./components/AuthButton";
 import { useAI } from "./hooks/useAI";
+import { useAuth } from "./hooks/useAuth";
+import { useWrongAnswers } from "./hooks/useWrongAnswers";
 import { parsePdf, PdfParseError } from "./lib/pdfParser";
+import { codeToLabel } from "./lib/subjects";
 
 // ── 색상 토큰 (Claude UI 스타일) ──────────────────────────────
 // bg: #1a1a1a / surface: #262626 / border: #333 / accent: #cc785c
@@ -61,6 +64,8 @@ const SAMPLE_QUESTIONS = [
 // ── 메인 앱 ────────────────────────────────────────────────────
 export default function CertPassAI() {
   const ai = useAI();
+  const { user } = useAuth();
+  const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers(user);
   const [tab, setTab] = useState("study"); // study | wrong | upload
   const [questions, setQuestions] = useState(SAMPLE_QUESTIONS);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -70,7 +75,6 @@ export default function CertPassAI() {
   const [showExplanation, setShowExplanation] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiExplanation, setAiExplanation] = useState("");
-  const [wrongAnswers, setWrongAnswers] = useState([]);
   const [correctCount, setCorrectCount] = useState(0);
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [pdfParsing, setPdfParsing] = useState(false);
@@ -101,10 +105,7 @@ export default function CertPassAI() {
     if (correct) {
       setCorrectCount((c) => c + 1);
     } else {
-      setWrongAnswers((prev) => {
-        if (prev.find((w) => w.id === current.id)) return prev;
-        return [...prev, { ...current, myAnswer: userAnswer }];
-      });
+      addWrong(current, userAnswer);
     }
 
     // AI 해설 스트리밍 (Vercel Function 프록시 → Gemini)
@@ -138,15 +139,6 @@ export default function CertPassAI() {
     setAiExplanation("");
   }
 
-  // subject 코드(Supabase CHECK enum) → 한글 라벨 (UI에서 사용)
-  const SUBJECT_LABEL = {
-    "sw-design": "소프트웨어 설계",
-    "sw-dev": "소프트웨어 개발",
-    db: "데이터베이스",
-    lang: "프로그래밍 언어",
-    infra: "시스템 구축관리",
-  };
-
   async function handlePdfUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -158,7 +150,7 @@ export default function CertPassAI() {
       const generated = await ai.generateQuestion(fullText);
       const newQ = {
         id: Date.now(),
-        subject: SUBJECT_LABEL[generated.subject] || generated.subject,
+        subject: codeToLabel(generated.subject),
         type: generated.type,
         question: generated.question,
         answer: generated.answer,
@@ -328,15 +320,28 @@ a                {wrongAnswers.map((w) => (
                         정답: {w.answer}
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        const idx = questions.findIndex((q) => q.id === w.id);
-                        if (idx !== -1) { setCurrentIdx(idx); setTab("study"); setUserAnswer(""); setSubmitted(false); setShowHint(false); setShowExplanation(false); setAiExplanation(""); }
-                      }}
-                      style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #cc785c44", color: "#cc785c" }}
-                    >
-                      다시 풀기 →
-                    </button>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button
+                        onClick={() => {
+                          const idx = questions.findIndex((q) => q.id === w.id);
+                          if (idx !== -1) { setCurrentIdx(idx); setTab("study"); setUserAnswer(""); setSubmitted(false); setShowHint(false); setShowExplanation(false); setAiExplanation(""); }
+                        }}
+                        style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #cc785c44", color: "#cc785c" }}
+                      >
+                        다시 풀기 →
+                      </button>
+                      {!w.reviewed && (
+                        <button
+                          onClick={() => markReviewed(w.id)}
+                          style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #4ade8044", color: "#4ade80" }}
+                        >
+                          ✅ 복습 완료
+                        </button>
+                      )}
+                      {w.reviewed && (
+                        <span style={{ padding: "7px 10px", fontSize: 12, color: "#4ade80" }}>✅ 복습됨</span>
+                      )}
+                    </div>
                   </div>
                 ))}
               </>
