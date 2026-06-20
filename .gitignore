@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 .vite
+.vercel
 .env
 
 # 로컬 전용 설계 문서 (Notion에서 관리)
