@@ -238,7 +238,36 @@ export default function CertPassAI() {
             </button>
           </div>
         )}
-        {tab === "study" && current && (
+        {tab === "study" && !retryMode && filteredQuestions.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
+            <p style={{ fontSize: 40 }}>📭</p>
+            <p style={{ fontSize: 15, color: "#888", marginTop: 12 }}>이 조건에 맞는 문제가 없어요.</p>
+            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
+              {sourceFilter === "shared"
+                ? "공유 풀에 아직 문제가 시드되지 않았어요. PDF 업로드로 채워주세요."
+                : sourceFilter === "personal"
+                  ? "PDF를 업로드하면 본인 풀에 문제가 쌓여요."
+                  : "과목 필터를 바꿔보세요."}
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+              <button
+                onClick={() => { setSourceFilter("all"); setSelectedSubject("all"); setCurrentIdx(0); }}
+                style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
+              >
+                필터 초기화
+              </button>
+              {(sourceFilter === "shared" || sourceFilter === "personal") && (
+                <button
+                  onClick={() => setTab("upload")}
+                  style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
+                >
+                  📎 PDF 업로드하러 가기
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {tab === "study" && current && filteredQuestions.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {retryMode && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 10, backgroundColor: "#cc785c11", border: "1px solid #cc785c44" }}>
