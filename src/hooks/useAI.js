@@ -47,12 +47,16 @@ export function useAI() {
     return accumulated;
   }
 
-  // PDF 발췌 → 새 문제 JSON 1개 반환.
-  async function generateQuestion(pdfExcerpt) {
+  // PDF 발췌 → 새 문제 JSON 1개 반환. 로그인 시 DB에 자동 저장.
+  // options: { source: 'personal'|'shared', year, round, accessToken }
+  async function generateQuestion(pdfExcerpt, options = {}) {
+    const { source = 'personal', year = null, round = null, accessToken } = options;
+    const headers = { 'Content-Type': 'application/json' };
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const res = await fetch('/api/generate-question', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdfExcerpt }),
+      headers,
+      body: JSON.stringify({ pdfExcerpt, source, year, round }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `문제 생성 실패 (${res.status})`);

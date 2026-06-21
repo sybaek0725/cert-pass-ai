@@ -4,11 +4,13 @@ import AnswerInput from "./components/AnswerInput";
 import ExplanationPanel from "./components/ExplanationPanel";
 import ShareCard from "./components/ShareCard";
 import AuthButton from "./components/AuthButton";
+import { supabase as supabaseImport } from "./lib/supabase";
 import { useAI } from "./hooks/useAI";
 import { useAuth } from "./hooks/useAuth";
 import { useWrongAnswers } from "./hooks/useWrongAnswers";
+import { useQuestions } from "./hooks/useQuestions";
 import { parsePdf, PdfParseError } from "./lib/pdfParser";
-import { codeToLabel } from "./lib/subjects";
+import { isAdminEmail } from "./lib/admin";
 
 // ── 색상 토큰 (Claude UI 스타일) ──────────────────────────────
 // bg: #1a1a1a / surface: #262626 / border: #333 / accent: #cc785c
@@ -22,52 +24,18 @@ const SUBJECTS = [
   { id: "infra", label: "시스템 구축관리" },
 ];
 
-const SAMPLE_QUESTIONS = [
-  {
-    id: 1,
-    subject: "데이터베이스",
-    type: "단답형",
-    question:
-      "데이터베이스에서 트랜잭션의 특성 중 하나로, 트랜잭션 내의 연산이 모두 반영되거나 전혀 반영되지 않아야 하는 성질을 무엇이라고 하는가?",
-    answer: "원자성(Atomicity)",
-    hint: "ACID 속성 중 하나입니다.",
-    explanation:
-      "**원자성(Atomicity)**은 트랜잭션의 연산이 모두 정상적으로 실행되거나, 하나라도 실패하면 전체가 취소(Rollback)되어야 하는 성질입니다.\n\n### ACID 특성 정리\n- **A**tomicity (원자성): All or Nothing\n- **C**onsistency (일관성): 트랜잭션 전후 DB 상태가 일관적\n- **I**solation (독립성): 트랜잭션 간 간섭 없음\n- **D**urability (지속성): 완료된 트랜잭션 결과는 영구 반영\n\n> 💡 **시험 TIP**: ACID를 영어 단어와 함께 암기하세요. 원자성은 '분리 불가능'으로 기억!",
-    keywords: ["ACID", "트랜잭션", "원자성"],
-  },
-  {
-    id: 2,
-    subject: "소프트웨어 설계",
-    type: "단답형",
-    question:
-      "객체지향 설계 원칙(SOLID) 중 소프트웨어 요소는 확장에는 열려 있으나 변경에는 닫혀 있어야 한다는 원칙은?",
-    answer: "개방-폐쇄 원칙(OCP, Open-Closed Principle)",
-    hint: "SOLID의 두 번째 원칙입니다.",
-    explanation:
-      "**개방-폐쇄 원칙(OCP)**은 기존 코드를 변경하지 않고 새로운 기능을 추가할 수 있어야 한다는 원칙입니다.\n\n### SOLID 원칙 전체 정리\n- **S**RP: 단일 책임 원칙\n- **O**CP: 개방-폐쇄 원칙 ← 오늘 문제\n- **L**SP: 리스코프 치환 원칙\n- **I**SP: 인터페이스 분리 원칙\n- **D**IP: 의존 역전 원칙\n\n> 💡 **시험 TIP**: 확장엔 Open, 수정엔 Closed. 인터페이스/추상클래스로 구현!",
-    keywords: ["SOLID", "OCP", "객체지향"],
-  },
-  {
-    id: 3,
-    subject: "프로그래밍 언어",
-    type: "코드완성",
-    question:
-      "다음 Python 코드의 출력 결과를 쓰시오.\n\n```python\ndef factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\n\nprint(factorial(5))\n```",
-    answer: "120",
-    hint: "재귀 함수입니다. 5! 를 계산하세요.",
-    explanation:
-      "**재귀 함수**로 팩토리얼을 계산하는 코드입니다.\n\n### 실행 흐름\n```\nfactorial(5)\n= 5 × factorial(4)\n= 5 × 4 × factorial(3)\n= 5 × 4 × 3 × factorial(2)\n= 5 × 4 × 3 × 2 × factorial(1)\n= 5 × 4 × 3 × 2 × 1\n= 120\n```\n\n> 💡 **시험 TIP**: 재귀 문제는 base case(탈출 조건)부터 확인하세요. `n <= 1`이면 1 반환!",
-    keywords: ["재귀", "팩토리얼", "Python"],
-  },
-];
-
 // ── 메인 앱 ────────────────────────────────────────────────────
 export default function CertPassAI() {
   const ai = useAI();
   const { user } = useAuth();
+  const isAdmin = isAdminEmail(user?.email);
   const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers(user);
+  const { items: questions, reload: reloadQuestions } = useQuestions(user);
   const [tab, setTab] = useState("study"); // study | wrong | upload
-  const [questions, setQuestions] = useState(SAMPLE_QUESTIONS);
+  const [sourceFilter, setSourceFilter] = useState("all"); // all | shared | personal
+  const [pdfYear, setPdfYear] = useState("");
+  const [pdfRound, setPdfRound] = useState("");
+  const [pdfAsShared, setPdfAsShared] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -83,20 +51,26 @@ export default function CertPassAI() {
   const fileInputRef = useRef(null);
 
   const retryPool = wrongAnswers.filter((w) => !w.reviewed);
+  const SUBJECT_LABEL_MAP = {
+    "sw-design": "소프트웨어 설계",
+    "sw-dev": "소프트웨어 개발",
+    db: "데이터베이스",
+    lang: "프로그래밍 언어",
+    infra: "시스템 구축관리",
+  };
+  // 1) source 필터: 기출(shared) / 내 PDF(personal) / 전체 (SAMPLE은 전체에만)
+  const sourceFiltered = questions.filter((q) => {
+    if (sourceFilter === "all") return true;
+    if (sourceFilter === "shared") return q.source === "shared";
+    if (sourceFilter === "personal") return q.source === "personal";
+    return true;
+  });
+  // 2) subject 필터
   const filteredQuestions = selectedSubject === "all"
-    ? questions
-    : questions.filter((q) => {
-        const map = {
-          "sw-design": "소프트웨어 설계",
-          "sw-dev": "소프트웨어 개발",
-          db: "데이터베이스",
-          lang: "프로그래밍 언어",
-          infra: "시스템 구축관리",
-        };
-        return q.subject === map[selectedSubject];
-      });
+    ? sourceFiltered
+    : sourceFiltered.filter((q) => q.subject === SUBJECT_LABEL_MAP[selectedSubject]);
 
-  const current = retryMode ? retryPool[0] : questions[currentIdx];
+  const current = retryMode ? retryPool[0] : filteredQuestions[currentIdx] || filteredQuestions[0];
   const isCorrect = submitted && userAnswer.trim().includes(current?.answer?.split("(")[0].trim());
 
   function resetQuestionState() {
@@ -165,25 +139,30 @@ export default function CertPassAI() {
   async function handlePdfUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!user) {
+      setPdfStatus("❌ PDF 업로드는 로그인이 필요해요.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
     setPdfParsing(true);
     setPdfStatus("PDF 분석 중...");
     try {
       const { fullText } = await parsePdf(file);
       setPdfStatus("AI가 유사 문제 생성 중...");
-      const generated = await ai.generateQuestion(fullText);
-      const newQ = {
-        id: Date.now(),
-        subject: codeToLabel(generated.subject),
-        type: generated.type,
-        question: generated.question,
-        answer: generated.answer,
-        hint: generated.hint,
-        explanation: generated.explanation,
-        keywords: generated.keywords || [],
-      };
-      setQuestions((prev) => [...prev, newQ]);
-      setPdfStatus("✅ 완료! 1개의 새 문제가 추가되었습니다.");
+      const wantShared = isAdmin && pdfAsShared;
+      const session = (await supabaseImport.auth.getSession()).data.session;
+      await ai.generateQuestion(fullText, {
+        source: wantShared ? "shared" : "personal",
+        year: pdfYear ? Number(pdfYear) : null,
+        round: pdfRound ? Number(pdfRound) : null,
+        accessToken: session?.access_token,
+      });
+      await reloadQuestions();
+      setPdfStatus(wantShared
+        ? "✅ 공유 풀에 1문제 추가됐어요."
+        : "✅ 내 풀에 1문제 추가됐어요.");
       setTab("study");
+      setSourceFilter(wantShared ? "shared" : "personal");
     } catch (err) {
       const msg = err instanceof PdfParseError ? err.message : err.message || "처리 중 오류가 발생했습니다.";
       setPdfStatus(`❌ ${msg}`);
@@ -259,23 +238,37 @@ export default function CertPassAI() {
             </button>
           </div>
         )}
-        {tab === "study" && current && (
+        {tab === "study" && !retryMode && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {retryMode && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 10, backgroundColor: "#cc785c11", border: "1px solid #cc785c44" }}>
-                <span style={{ fontSize: 13, color: "#e8906f", fontWeight: 600 }}>
-                  🔁 오답 복습 모드 · {retryPool.length}개 남음
-                </span>
-                <button
-                  onClick={exitRetryMode}
-                  style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-                >
-                  종료
-                </button>
+            {/* 소스 세그먼트 (로그인 + 일반 모드) */}
+            {user && (
+              <div style={{ display: "flex", gap: 0, padding: 3, borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
+                {[
+                  { id: "all", label: "전체" },
+                  { id: "shared", label: "📚 기출" },
+                  { id: "personal", label: "🆕 내 PDF" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => { setSourceFilter(s.id); setCurrentIdx(0); }}
+                    style={{
+                      flex: 1,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontWeight: sourceFilter === s.id ? 600 : 400,
+                      cursor: "pointer",
+                      border: "none",
+                      backgroundColor: sourceFilter === s.id ? "#cc785c" : "transparent",
+                      color: sourceFilter === s.id ? "#fff" : "#888",
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             )}
-            {/* 과목 필터 (일반 모드에서만) */}
-            {!retryMode && (
+            {/* 과목 필터 */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {SUBJECTS.map((s) => (
                 <button
@@ -296,15 +289,32 @@ export default function CertPassAI() {
                 </button>
               ))}
             </div>
-            )}
 
+            {filteredQuestions.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#555", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
+                <p style={{ fontSize: 32 }}>📭</p>
+                <p style={{ fontSize: 14, color: "#888", marginTop: 10 }}>해당 조건에 맞는 문제가 없어요.</p>
+                <p style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                  {sourceFilter === "shared"
+                    ? "공유 풀에 아직 문제가 시드되지 않았어요."
+                    : sourceFilter === "personal"
+                      ? "PDF 업로드로 본인 풀을 채워보세요."
+                      : "과목 필터를 바꿔보세요."}
+                </p>
+                {(sourceFilter === "shared" || sourceFilter === "personal") && (
+                  <button
+                    onClick={() => setTab("upload")}
+                    style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
+                  >
+                    📎 PDF 업로드하러 가기
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
             {/* 진행률 */}
             <div style={{ fontSize: 12, color: "#555", display: "flex", justifyContent: "space-between" }}>
-              {retryMode ? (
-                <span>복습 진행: {wrongAnswers.length - retryPool.length} / {wrongAnswers.length}</span>
-              ) : (
-                <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
-              )}
+              <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
               <span style={{ color: "#4ade80" }}>정답률 {questions.length > 0 ? Math.round((correctCount / Math.max(currentIdx, 1)) * 100) : 0}%</span>
             </div>
 
@@ -338,6 +348,8 @@ export default function CertPassAI() {
                   </span>
                 ))}
               </div>
+            )}
+              </>
             )}
           </div>
         )}
@@ -423,6 +435,49 @@ a                {wrongAnswers.map((w) => (
                 큐넷에서 다운받은 기출문제 PDF를 업로드하면<br />
                 AI가 저작권 안전한 유사 문제로 재생성해드려요.
               </p>
+
+              {/* 회차/연도 + 관리자 공유 토글 */}
+              {user && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16, padding: 14, borderRadius: 10, backgroundColor: "#1a1a1a", border: "1px solid #2a2a2a" }}>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <label style={{ flex: 1, fontSize: 12, color: "#888" }}>
+                      연도 (선택)
+                      <input
+                        type="number"
+                        value={pdfYear}
+                        onChange={(e) => setPdfYear(e.target.value)}
+                        placeholder="예: 2025"
+                        style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 13 }}
+                      />
+                    </label>
+                    <label style={{ flex: 1, fontSize: 12, color: "#888" }}>
+                      회차 (선택)
+                      <input
+                        type="number"
+                        value={pdfRound}
+                        onChange={(e) => setPdfRound(e.target.value)}
+                        placeholder="예: 1"
+                        style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 13 }}
+                      />
+                    </label>
+                  </div>
+                  {isAdmin && (
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#e8906f", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={pdfAsShared}
+                        onChange={(e) => setPdfAsShared(e.target.checked)}
+                      />
+                      🌐 공유 풀(전 사용자 공개)에 추가
+                    </label>
+                  )}
+                </div>
+              )}
+              {!user && (
+                <p style={{ fontSize: 12, color: "#fbbf24", marginBottom: 12 }}>
+                  ⚠ PDF 업로드 결과를 영구 저장하려면 Google 로그인이 필요해요.
+                </p>
+              )}
 
               <input type="file" ref={fileInputRef} accept=".pdf" onChange={handlePdfUpload} style={{ display: "none" }} />
               <button
