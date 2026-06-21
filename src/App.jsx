@@ -238,52 +238,10 @@ export default function CertPassAI() {
             </button>
           </div>
         )}
-        {tab === "study" && !retryMode && filteredQuestions.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "#555" }}>
-            <p style={{ fontSize: 40 }}>📭</p>
-            <p style={{ fontSize: 15, color: "#888", marginTop: 12 }}>이 조건에 맞는 문제가 없어요.</p>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>
-              {sourceFilter === "shared"
-                ? "공유 풀에 아직 문제가 시드되지 않았어요. PDF 업로드로 채워주세요."
-                : sourceFilter === "personal"
-                  ? "PDF를 업로드하면 본인 풀에 문제가 쌓여요."
-                  : "과목 필터를 바꿔보세요."}
-            </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-              <button
-                onClick={() => { setSourceFilter("all"); setSelectedSubject("all"); setCurrentIdx(0); }}
-                style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-              >
-                필터 초기화
-              </button>
-              {(sourceFilter === "shared" || sourceFilter === "personal") && (
-                <button
-                  onClick={() => setTab("upload")}
-                  style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
-                >
-                  📎 PDF 업로드하러 가기
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {tab === "study" && current && filteredQuestions.length > 0 && (
+        {tab === "study" && !retryMode && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {retryMode && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: 10, backgroundColor: "#cc785c11", border: "1px solid #cc785c44" }}>
-                <span style={{ fontSize: 13, color: "#e8906f", fontWeight: 600 }}>
-                  🔁 오답 복습 모드 · {retryPool.length}개 남음
-                </span>
-                <button
-                  onClick={exitRetryMode}
-                  style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-                >
-                  종료
-                </button>
-              </div>
-            )}
             {/* 소스 세그먼트 (로그인 + 일반 모드) */}
-            {!retryMode && user && (
+            {user && (
               <div style={{ display: "flex", gap: 0, padding: 3, borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
                 {[
                   { id: "all", label: "전체" },
@@ -310,8 +268,7 @@ export default function CertPassAI() {
                 ))}
               </div>
             )}
-            {/* 과목 필터 (일반 모드에서만) */}
-            {!retryMode && (
+            {/* 과목 필터 */}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {SUBJECTS.map((s) => (
                 <button
@@ -332,15 +289,32 @@ export default function CertPassAI() {
                 </button>
               ))}
             </div>
-            )}
 
+            {filteredQuestions.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#555", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
+                <p style={{ fontSize: 32 }}>📭</p>
+                <p style={{ fontSize: 14, color: "#888", marginTop: 10 }}>해당 조건에 맞는 문제가 없어요.</p>
+                <p style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+                  {sourceFilter === "shared"
+                    ? "공유 풀에 아직 문제가 시드되지 않았어요."
+                    : sourceFilter === "personal"
+                      ? "PDF 업로드로 본인 풀을 채워보세요."
+                      : "과목 필터를 바꿔보세요."}
+                </p>
+                {(sourceFilter === "shared" || sourceFilter === "personal") && (
+                  <button
+                    onClick={() => setTab("upload")}
+                    style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
+                  >
+                    📎 PDF 업로드하러 가기
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
             {/* 진행률 */}
             <div style={{ fontSize: 12, color: "#555", display: "flex", justifyContent: "space-between" }}>
-              {retryMode ? (
-                <span>복습 진행: {wrongAnswers.length - retryPool.length} / {wrongAnswers.length}</span>
-              ) : (
-                <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
-              )}
+              <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
               <span style={{ color: "#4ade80" }}>정답률 {questions.length > 0 ? Math.round((correctCount / Math.max(currentIdx, 1)) * 100) : 0}%</span>
             </div>
 
@@ -374,6 +348,8 @@ export default function CertPassAI() {
                   </span>
                 ))}
               </div>
+            )}
+              </>
             )}
           </div>
         )}
