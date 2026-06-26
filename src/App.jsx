@@ -81,6 +81,11 @@ export default function CertPassAI() {
     setAiExplanation("");
   }
 
+  function changeTab(nextTab) {
+    setTab(nextTab);
+    resetQuestionState();
+  }
+
   function enterRetryMode() {
     if (retryPool.length === 0) return;
     setRetryMode(true);
@@ -161,8 +166,9 @@ export default function CertPassAI() {
       setPdfStatus(wantShared
         ? "✅ 공유 풀에 1문제 추가됐어요."
         : "✅ 내 풀에 1문제 추가됐어요.");
-      setTab("study");
+      changeTab("study");
       setSourceFilter(wantShared ? "shared" : "personal");
+      setCurrentIdx(0);
     } catch (err) {
       const msg = err instanceof PdfParseError ? err.message : err.message || "처리 중 오류가 발생했습니다.";
       setPdfStatus(`❌ ${msg}`);
@@ -203,7 +209,7 @@ export default function CertPassAI() {
           ].map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => changeTab(t.id)}
               style={{
                 padding: "12px 16px",
                 fontSize: 13,
@@ -303,7 +309,7 @@ export default function CertPassAI() {
                 </p>
                 {(sourceFilter === "shared" || sourceFilter === "personal") && (
                   <button
-                    onClick={() => setTab("upload")}
+                    onClick={() => changeTab("upload")}
                     style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
                   >
                     📎 PDF 업로드하러 가기
@@ -401,7 +407,7 @@ a                {wrongAnswers.map((w) => (
                       <button
                         onClick={() => {
                           const idx = questions.findIndex((q) => q.id === w.id);
-                          if (idx !== -1) { setCurrentIdx(idx); setTab("study"); setUserAnswer(""); setSubmitted(false); setShowHint(false); setShowExplanation(false); setAiExplanation(""); }
+                          if (idx !== -1) { setCurrentIdx(idx); changeTab("study"); }
                         }}
                         style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #cc785c44", color: "#cc785c" }}
                       >
