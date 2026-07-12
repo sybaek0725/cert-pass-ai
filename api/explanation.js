@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { question, correctAnswer, userAnswer } = req.body || {};
+  const { question, correctAnswer, userAnswer, topicName } = req.body || {};
   if (!question || !correctAnswer) {
     res.status(400).json({ error: 'question, correctAnswer는 필수입니다.' });
     return;
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       generationConfig: { maxOutputTokens: AI_MAX_OUTPUT_TOKENS, temperature: 0.4 },
     });
 
-    const userPrompt = buildExplanationUserPrompt({ question, correctAnswer, userAnswer });
+    const userPrompt = buildExplanationUserPrompt({ question, correctAnswer, userAnswer, topicName });
     const result = await model.generateContentStream(userPrompt);
 
     for await (const chunk of result.stream) {

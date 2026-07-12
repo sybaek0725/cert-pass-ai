@@ -1,4 +1,5 @@
-// Vercel Serverless Function — Gemini 문제 재생성 + Supabase 저장
+// Vercel Serverless Function — Gemini 문제 생성 + Supabase 저장
+// V2: PDF 제거, NCS 토픽 기반 문제 생성.
 // 로그인 사용자의 JWT를 Authorization 헤더로 받아 questions 테이블에 INSERT.
 // source='shared'는 ADMIN_EMAILS에 포함된 이메일만 허용.
 
@@ -6,12 +7,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import {
   QUESTION_GENERATE_SYSTEM,
-  buildQuestionGenerateUserPrompt,
+  buildTopicQuestionUserPrompt,
   AI_MODEL,
   AI_MAX_OUTPUT_TOKENS,
   SUBJECT_CODES,
   QUESTION_TYPES,
 } from '../src/lib/aiPrompts.js';
+import { getTopicById } from '../src/data/topics.js';
 
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
@@ -59,13 +61,19 @@ export default async function handler(req, res) {
     return;
   }
 
-  const { pdfExcerpt, source = 'personal', year = null, round = null } = req.body || {};
-  if (!pdfExcerpt || typeof pdfExcerpt !== 'string') {
-    res.status(400).json({ error: 'pdfExcerpt(string)는 필수입니다.' });
+  const { topicId, source = 'personal' } = req.body || {};
+  if (!topicId || typeof topicId !== 'string') {
+    res.status(400).json({ error: 'topicId(string)는 필수입니다. 예: "7-22"' });
     return;
   }
   if (!['personal', 'shared'].includes(source)) {
     res.status(400).json({ error: 'source는 personal 또는 shared여야 합니다.' });
+    return;
+  }
+
+  const topic = getTopicById(topicId);
+  if (!topic) {
+    res.status(400).json({ error: `topicId '${topicId}'를 찾을 수 없습니다.` });
     return;
   }
 
@@ -96,7 +104,7 @@ export default async function handler(req, res) {
         responseMimeType: 'application/json',
       },
     });
-    const userPrompt = buildQuestionGenerateUserPrompt(pdfExcerpt.slice(0, 4000));
+    const userPrompt = buildTopicQuestionUserPrompt(topic.name, topic.chapterName);
     const result = await model.generateContent(userPrompt);
     question = tryParseQuestionJson(result.response.text());
   } catch (e) {
@@ -112,7 +120,7 @@ export default async function handler(req, res) {
   });
   const insertRow = {
     user_id: auth.user.id,
-    subject: question.subject,
+    subject: question.subject || null,
     type: question.type,
     question: question.question,
     answer: question.answer,
@@ -120,13 +128,13 @@ export default async function handler(req, res) {
     explanation: question.explanation || null,
     keywords: question.keywords || [],
     source,
-    year: year ? Number(year) : null,
-    round: round ? Number(round) : null,
+    chapter_id: topic.chapterId,
+    topic_id: topic.id,
   };
   const { data: inserted, error: insertErr } = await supa
     .from('questions')
     .insert(insertRow)
-    .select('id, source, year, round')
+    .select('id, source, chapter_id, topic_id')
     .single();
 
   if (insertErr) {
