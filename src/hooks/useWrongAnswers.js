@@ -59,63 +59,60 @@ export function useWrongAnswers(user) {
 
   const addWrong = useCallback(
     async (question, myAnswer) => {
-      // 중복 방지: 같은 question.id가 이미 있으면 myAnswer만 갱신
+      // 중복 방지: 같은 question.id가 이미 있으면 스킵
       setItems((prev) => {
         if (prev.find((w) => w.id === question.id)) return prev;
-        return [
-          ...prev,
-          { ...question, myAnswer, reviewed: false },
-        ];
+        return [...prev, { ...question, myAnswer, reviewed: false }];
       });
 
       if (!user) return; // 비로그인: DB 저장 안 함
 
-      const subjectCode = labelToCode(question.subject);
-      if (!subjectCode || !VALID_TYPES.includes(question.type)) {
-        console.warn('[wrong_answers] subject/type가 DB enum과 안 맞아 저장 생략', {
-          subject: question.subject,
-          type: question.type,
-        });
-        return;
-      }
+      // V2 생성 문제는 이미 DB에 있으므로 dbId(=questions.id) 직접 사용
+      let questionDbId = question.dbId || null;
 
-      const { data: q, error: qErr } = await supabase
-        .from('questions')
-        .insert({
-          user_id: user.id,
-          subject: subjectCode,
-          type: question.type,
-          question: question.question,
-          answer: question.answer,
-          hint: question.hint || null,
-          explanation: question.explanation || null,
-          keywords: question.keywords || [],
-        })
-        .select('id')
-        .single();
-      if (qErr) {
-        console.error('[wrong_answers] question insert 실패', qErr);
-        return;
+      if (!questionDbId) {
+        const subjectCode = labelToCode(question.subject);
+        if (!subjectCode || !VALID_TYPES.includes(question.type)) {
+          console.warn('[wrong_answers] subject/type가 DB enum과 안 맞아 저장 생략', {
+            subject: question.subject,
+            type: question.type,
+          });
+          return;
+        }
+        const { data: q, error: qErr } = await supabase
+          .from('questions')
+          .insert({
+            user_id: user.id,
+            subject: subjectCode,
+            type: question.type,
+            question: question.question,
+            answer: question.answer,
+            hint: question.hint || null,
+            explanation: question.explanation || null,
+            keywords: question.keywords || [],
+          })
+          .select('id')
+          .single();
+        if (qErr) {
+          console.error('[wrong_answers] question insert 실패', qErr);
+          return;
+        }
+        questionDbId = q.id;
+        setItems((prev) =>
+          prev.map((w) => (w.id === question.id ? { ...w, dbId: questionDbId } : w))
+        );
       }
 
       const { error: waErr } = await supabase.from('wrong_answers').upsert(
         {
           user_id: user.id,
-          question_id: q.id,
+          question_id: questionDbId,
           my_answer: myAnswer,
           reviewed: false,
         },
         { onConflict: 'user_id,question_id' }
       );
-      if (waErr) {
-        console.error('[wrong_answers] upsert 실패', waErr);
-        return;
-      }
-
-      // 로컬 state에 dbId 매핑
-      setItems((prev) =>
-        prev.map((w) => (w.id === question.id ? { ...w, dbId: q.id } : w))
-      );
+      if (waErr) console.error('[wrong_answers] upsert 실패', waErr);
     },
     [user]
   );
