@@ -14,14 +14,14 @@ import { codeToLabel } from "./lib/subjects";
 
 export default function CertPassAI() {
   const ai = useAI();
-  const { user } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
   const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers(user);
 
   // ── 탭 ────────────────────────────────────────────────────
   const [tab, setTab] = useState("study"); // study | wrong
 
   // ── 학습 뷰 상태 ──────────────────────────────────────────
-  // chapters → topics → question | login-required
+  // chapters → topics → question
   const [studyView, setStudyView] = useState("chapters");
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
@@ -62,14 +62,8 @@ export default function CertPassAI() {
     resetQuestionState();
   }
 
-  // ── 토픽 선택 → 비로그인 체크 → 문제 생성 ────────────────
+  // ── 토픽 선택 → 문제 생성 ────────────────────────────────
   async function handleTopicSelect(topic) {
-    if (!user) {
-      setSelectedTopic(topic);
-      setStudyView("login-required");
-      return;
-    }
-
     setSelectedTopic(topic);
     setGeneratedQuestion(null);
     setGenerating(true);
@@ -151,6 +145,43 @@ export default function CertPassAI() {
     }
   }
 
+  // ── 비로그인 / 로딩 화면 ──────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 13, color: "#555" }}>로딩 중...</span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
+        <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #cc785c, #e8906f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 20 }}>
+          🎯
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.5px" }}>CertPass AI</h1>
+        <p style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>정보처리기사 실기 AI 학습 코치</p>
+        <p style={{ fontSize: 13, color: "#555", marginBottom: 32, textAlign: "center", lineHeight: 1.7 }}>
+          241개 토픽 무한 문제 풀기<br />AI 10단계 해설로 개념까지 이해
+        </p>
+        <button
+          onClick={() => signInWithGoogle().catch((e) => alert(e.message))}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 10, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+        >
+          <svg width="18" height="18" viewBox="0 0 48 48">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Google로 시작하기
+        </button>
+        <p style={{ marginTop: 20, fontSize: 11, color: "#444" }}>로그인하면 학습 기록이 자동 저장됩니다.</p>
+      </div>
+    );
+  }
+
   // ── 렌더 ──────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", color: "#ececec" }}>
@@ -216,24 +247,6 @@ export default function CertPassAI() {
                 onSelectTopic={handleTopicSelect}
                 onBack={() => setStudyView("chapters")}
               />
-            )}
-
-            {/* 비로그인 유도 */}
-            {studyView === "login-required" && (
-              <div style={{ textAlign: "center", padding: "60px 20px", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
-                <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
-                <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>로그인이 필요해요</p>
-                <p style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.7 }}>
-                  토픽 학습 및 AI 문제 생성은<br />Google 로그인 후 이용할 수 있어요.
-                </p>
-                <AuthButton />
-                <button
-                  onClick={() => setStudyView("topics")}
-                  style={{ display: "block", margin: "16px auto 0", fontSize: 12, color: "#555", background: "none", border: "none", cursor: "pointer" }}
-                >
-                  ← 토픽 목록으로
-                </button>
-              </div>
             )}
 
             {/* 문제 풀기 */}
