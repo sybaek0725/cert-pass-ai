@@ -3,6 +3,7 @@
 // 로그인 사용자의 JWT를 Authorization 헤더로 받아 questions 테이블에 INSERT.
 // source='shared'는 ADMIN_EMAILS에 포함된 이메일만 허용.
 
+import { WebSocket } from 'ws';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -15,6 +16,9 @@ import {
 } from '../src/lib/aiPrompts.js';
 import { getTopicById } from '../src/data/topics.js';
 
+// Node.js 20은 native WebSocket 없음 → ws 폴리필
+globalThis.WebSocket = WebSocket;
+
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
   .map((s) => s.trim().toLowerCase())
@@ -23,11 +27,13 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
 function tryParseQuestionJson(raw) {
   const trimmed = raw.trim().replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim();
   const obj = JSON.parse(trimmed);
-  if (!SUBJECT_CODES.includes(obj.subject)) {
-    throw new Error(`subject 값이 유효하지 않습니다: ${obj.subject}`);
+  // subject: AI가 enum 외 값을 반환하면 null로 fallback (V2에서는 nullable)
+  if (obj.subject && !SUBJECT_CODES.includes(obj.subject)) {
+    obj.subject = null;
   }
+  // type: 유효하지 않으면 기본값으로 fallback
   if (!QUESTION_TYPES.includes(obj.type)) {
-    throw new Error(`type 값이 유효하지 않습니다: ${obj.type}`);
+    obj.type = '단답형';
   }
   if (!obj.question || !obj.answer) {
     throw new Error('question 또는 answer가 비어 있습니다.');
@@ -108,7 +114,8 @@ export default async function handler(req, res) {
     const result = await model.generateContent(userPrompt);
     question = tryParseQuestionJson(result.response.text());
   } catch (e) {
-    res.status(500).json({ error: e?.message || '문제 생성 중 오류' });
+    console.error('[generate-question] Gemini 오류:', e?.message);
+    res.status(500).json({ error: `문제 생성 오류: ${e?.message || '알 수 없는 오류'}` });
     return;
   }
 
@@ -138,6 +145,7 @@ export default async function handler(req, res) {
     .single();
 
   if (insertErr) {
+    console.error('[generate-question] DB 오류:', insertErr.message, insertErr.details);
     res.status(500).json({ error: `DB 저장 실패: ${insertErr.message}` });
     return;
   }

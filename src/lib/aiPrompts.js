@@ -62,4 +62,4 @@ ${question}
 // ── 3. AI 호출 공통 설정 ──────────────────────────────────
 // V2: Gemini 2.5 Flash (Vercel Serverless Function 경유, 무료 한도 활용).
 export const AI_MODEL = 'gemini-2.5-flash';
-export const AI_MAX_OUTPUT_TOKENS = 1000;
+export const AI_MAX_OUTPUT_TOKENS = 2048;
