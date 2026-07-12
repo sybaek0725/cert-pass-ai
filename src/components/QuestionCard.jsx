@@ -1,12 +1,19 @@
-export default function QuestionCard({ question, showHint }) {
+export default function QuestionCard({ question, showHint, topicName }) {
   if (!question) return null;
   return (
     <div className="cp-question-card cp-fade-in" style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {topicName && (
+          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#cc785c22', color: '#cc785c', border: '1px solid #cc785c44' }}>
+            {topicName}
+          </span>
+        )}
+        {!topicName && question.subject && (
+          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
+            {question.subject}
+          </span>
+        )}
         <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
-          {question.subject}
-        </span>
-        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#cc785c22', color: '#e8906f', border: '1px solid #cc785c44' }}>
           {question.type}
         </span>
       </div>

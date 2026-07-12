@@ -10,6 +10,7 @@ import { supabase as supabaseClient } from "./lib/supabase";
 import { useAI } from "./hooks/useAI";
 import { useAuth } from "./hooks/useAuth";
 import { useWrongAnswers } from "./hooks/useWrongAnswers";
+import { codeToLabel } from "./lib/subjects";
 
 export default function CertPassAI() {
   const ai = useAI();
@@ -19,13 +20,17 @@ export default function CertPassAI() {
   // ── 탭 ────────────────────────────────────────────────────
   const [tab, setTab] = useState("study"); // study | wrong
 
-  // ── 학습 뷰 상태 (chapters → topics → question) ───────────
+  // ── 학습 뷰 상태 ──────────────────────────────────────────
+  // chapters → topics → question | login-required
   const [studyView, setStudyView] = useState("chapters");
   const [selectedChapter, setSelectedChapter] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [generatedQuestion, setGeneratedQuestion] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState("");
+
+  // ── 세션 통계 (토픽별 리셋) ────────────────────────────────
+  const [sessionStats, setSessionStats] = useState({ correct: 0, total: 0 });
 
   // ── 문제 풀기 상태 ─────────────────────────────────────────
   const [userAnswer, setUserAnswer] = useState("");
@@ -57,21 +62,28 @@ export default function CertPassAI() {
     resetQuestionState();
   }
 
-  // ── 토픽 선택 → 문제 생성 ─────────────────────────────────
+  // ── 토픽 선택 → 비로그인 체크 → 문제 생성 ────────────────
   async function handleTopicSelect(topic) {
+    if (!user) {
+      setSelectedTopic(topic);
+      setStudyView("login-required");
+      return;
+    }
+
     setSelectedTopic(topic);
     setGeneratedQuestion(null);
     setGenerating(true);
     setStudyView("question");
+    setSessionStats({ correct: 0, total: 0 });
     resetQuestionState();
+
     try {
       const session = (await supabaseClient.auth.getSession()).data.session;
       const q = await ai.generateQuestionByTopic(topic.id, {
         source: "personal",
         accessToken: session?.access_token,
       });
-      // dbId 세팅: 이미 DB에 저장된 문제이므로 addWrong에서 중복 INSERT 방지
-      setGeneratedQuestion({ ...q, dbId: q.id });
+      setGeneratedQuestion({ ...q, dbId: q.id, subject: codeToLabel(q.subject) });
     } catch (e) {
       setGenerateError(e.message || "문제 생성에 실패했어요.");
     } finally {
@@ -81,8 +93,22 @@ export default function CertPassAI() {
 
   // ── 다음 문제 (같은 토픽 재생성) ──────────────────────────
   async function handleNext() {
-    if (!selectedTopic) return;
-    await handleTopicSelect(selectedTopic);
+    if (!selectedTopic || !user) return;
+    setGeneratedQuestion(null);
+    setGenerating(true);
+    resetQuestionState();
+    try {
+      const session = (await supabaseClient.auth.getSession()).data.session;
+      const q = await ai.generateQuestionByTopic(selectedTopic.id, {
+        source: "personal",
+        accessToken: session?.access_token,
+      });
+      setGeneratedQuestion({ ...q, dbId: q.id, subject: codeToLabel(q.subject) });
+    } catch (e) {
+      setGenerateError(e.message || "문제 생성에 실패했어요.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   // ── 답안 제출 ─────────────────────────────────────────────
@@ -99,7 +125,9 @@ export default function CertPassAI() {
     const correct = userAnswer.trim().includes(current.answer.split("(")[0].trim());
     if (correct) {
       setCorrectCount((c) => c + 1);
+      setSessionStats((s) => ({ correct: s.correct + 1, total: s.total + 1 }));
     } else {
+      setSessionStats((s) => ({ ...s, total: s.total + 1 }));
       addWrong(current, userAnswer);
     }
 
@@ -190,20 +218,45 @@ export default function CertPassAI() {
               />
             )}
 
+            {/* 비로그인 유도 */}
+            {studyView === "login-required" && (
+              <div style={{ textAlign: "center", padding: "60px 20px", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
+                <div style={{ fontSize: 40, marginBottom: 16 }}>🔐</div>
+                <p style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>로그인이 필요해요</p>
+                <p style={{ fontSize: 13, color: "#888", marginBottom: 24, lineHeight: 1.7 }}>
+                  토픽 학습 및 AI 문제 생성은<br />Google 로그인 후 이용할 수 있어요.
+                </p>
+                <AuthButton />
+                <button
+                  onClick={() => setStudyView("topics")}
+                  style={{ display: "block", margin: "16px auto 0", fontSize: 12, color: "#555", background: "none", border: "none", cursor: "pointer" }}
+                >
+                  ← 토픽 목록으로
+                </button>
+              </div>
+            )}
+
             {/* 문제 풀기 */}
             {studyView === "question" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* 브레드크럼 */}
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    onClick={() => { setStudyView("topics"); resetQuestionState(); }}
-                    style={{ padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-                  >
-                    ← 토픽 목록
-                  </button>
-                  {selectedTopic && (
-                    <span style={{ fontSize: 12, color: "#555" }}>
-                      Ch.{selectedChapter?.id} · {selectedTopic.name}
+                {/* 브레드크럼 + 세션 통계 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      onClick={() => { setStudyView("topics"); resetQuestionState(); setGeneratedQuestion(null); }}
+                      style={{ padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
+                    >
+                      ← 토픽
+                    </button>
+                    {selectedTopic && !generating && (
+                      <span style={{ fontSize: 12, color: "#555" }}>
+                        Ch.{selectedChapter?.id} · {selectedTopic.name.split("+")[0].trim()}
+                      </span>
+                    )}
+                  </div>
+                  {sessionStats.total > 0 && (
+                    <span style={{ fontSize: 12, color: sessionStats.correct === sessionStats.total ? "#4ade80" : "#888" }}>
+                      {sessionStats.correct}/{sessionStats.total} 정답
                     </span>
                   )}
                 </div>
@@ -213,7 +266,13 @@ export default function CertPassAI() {
                   <div style={{ textAlign: "center", padding: "60px 20px", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
                     <div style={{ fontSize: 28, marginBottom: 12 }}>✨</div>
                     <p style={{ fontSize: 14, color: "#888" }}>AI가 문제를 생성하고 있어요...</p>
-                    <p style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{selectedTopic?.name}</p>
+                    <p style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{selectedTopic?.name.split("+")[0].trim()}</p>
+                    <button
+                      onClick={() => { setStudyView("topics"); setGenerating(false); resetQuestionState(); }}
+                      style={{ marginTop: 20, padding: "6px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#666" }}
+                    >
+                      취소
+                    </button>
                   </div>
                 )}
 
@@ -233,7 +292,11 @@ export default function CertPassAI() {
                 {/* 문제 UI */}
                 {!generating && generatedQuestion && (
                   <>
-                    <QuestionCard question={generatedQuestion} showHint={showHint} />
+                    <QuestionCard
+                      question={generatedQuestion}
+                      showHint={showHint}
+                      topicName={selectedTopic?.name.split("+")[0].trim()}
+                    />
 
                     <AnswerInput
                       value={userAnswer}
@@ -283,9 +346,7 @@ export default function CertPassAI() {
             ) : (
               <>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "#666" }}>
-                    총 {wrongAnswers.length}개의 오답
-                  </span>
+                  <span style={{ fontSize: 13, color: "#666" }}>총 {wrongAnswers.length}개의 오답</span>
                 </div>
 
                 <div style={{ marginBottom: 12 }}>
@@ -296,7 +357,9 @@ export default function CertPassAI() {
                   <div key={w.id} style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #f8717122" }}>
                     {w.subject && (
                       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>{w.subject}</span>
+                        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>
+                          {w.subject}
+                        </span>
                       </div>
                     )}
                     <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, marginBottom: 12 }}>{w.question}</p>
@@ -309,15 +372,14 @@ export default function CertPassAI() {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                      {!w.reviewed && (
+                      {!w.reviewed ? (
                         <button
                           onClick={() => markReviewed(w.id)}
                           style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #4ade8044", color: "#4ade80" }}
                         >
                           ✅ 복습 완료
                         </button>
-                      )}
-                      {w.reviewed && (
+                      ) : (
                         <span style={{ padding: "7px 10px", fontSize: 12, color: "#4ade80" }}>✅ 복습됨</span>
                       )}
                     </div>
