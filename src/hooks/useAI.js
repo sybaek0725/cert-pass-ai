@@ -3,11 +3,12 @@
 
 export function useAI() {
   // 답안 채점 + AI 해설 스트리밍. onToken(누적 텍스트)으로 부분 결과 전달.
-  async function streamExplanation({ question, correctAnswer, userAnswer }, onToken) {
+  // topicName: 선택적 토픽명, 해설 품질 향상에 사용.
+  async function streamExplanation({ question, correctAnswer, userAnswer, topicName }, onToken) {
     const res = await fetch('/api/explanation', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, correctAnswer, userAnswer }),
+      body: JSON.stringify({ question, correctAnswer, userAnswer, topicName }),
     });
     if (!res.ok || !res.body) {
       const errPayload = await res.json().catch(() => ({}));
@@ -47,21 +48,21 @@ export function useAI() {
     return accumulated;
   }
 
-  // PDF 발췌 → 새 문제 JSON 1개 반환. 로그인 시 DB에 자동 저장.
-  // options: { source: 'personal'|'shared', year, round, accessToken }
-  async function generateQuestion(pdfExcerpt, options = {}) {
-    const { source = 'personal', year = null, round = null, accessToken } = options;
+  // 토픽 ID → 새 문제 JSON 1개 반환. 로그인 시 DB에 자동 저장.
+  // options: { source: 'personal'|'shared', accessToken }
+  async function generateQuestionByTopic(topicId, options = {}) {
+    const { source = 'personal', accessToken } = options;
     const headers = { 'Content-Type': 'application/json' };
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
     const res = await fetch('/api/generate-question', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ pdfExcerpt, source, year, round }),
+      body: JSON.stringify({ topicId, source }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `문제 생성 실패 (${res.status})`);
     return data.question;
   }
 
-  return { streamExplanation, generateQuestion };
+  return { streamExplanation, generateQuestionByTopic };
 }
