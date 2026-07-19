@@ -20,6 +20,9 @@ export default function CertPassAI() {
   // ── 탭 ────────────────────────────────────────────────────
   const [tab, setTab] = useState("study"); // study | wrong
 
+  // ── 학습 모드 ──────────────────────────────────────────────
+  const [studyMode, setStudyMode] = useState("explain"); // exam | explain
+
   // ── 학습 뷰 상태 ──────────────────────────────────────────
   // chapters → topics → question
   const [studyView, setStudyView] = useState("chapters");
@@ -62,7 +65,7 @@ export default function CertPassAI() {
     resetQuestionState();
   }
 
-  // ── 토픽 선택 → 문제 생성 ────────────────────────────────
+  // ── 토픽 선택 → DB 확인 → 없으면 AI 생성 ────────────────
   async function handleTopicSelect(topic) {
     setSelectedTopic(topic);
     setGeneratedQuestion(null);
@@ -72,6 +75,21 @@ export default function CertPassAI() {
     resetQuestionState();
 
     try {
+      // 1. 공유 풀에 시드된 문제 먼저 조회
+      const { data: seeded } = await supabaseClient
+        .from('questions')
+        .select('id, subject, type, question, answer, hint, explanation, keywords, source, chapter_id, topic_id')
+        .eq('source', 'shared')
+        .eq('topic_id', topic.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (seeded) {
+        setGeneratedQuestion({ ...seeded, dbId: seeded.id, subject: codeToLabel(seeded.subject) });
+        return;
+      }
+
+      // 2. 없으면 AI로 새로 생성
       const session = (await supabaseClient.auth.getSession()).data.session;
       const q = await ai.generateQuestionByTopic(topic.id, {
         source: "personal",
@@ -125,23 +143,25 @@ export default function CertPassAI() {
       addWrong(current, userAnswer);
     }
 
-    setAiLoading(true);
-    setShowExplanation(true);
-    setAiExplanation("");
-    try {
-      await ai.streamExplanation(
-        {
-          question: current.question,
-          correctAnswer: current.answer,
-          userAnswer,
-          topicName: selectedTopic?.name,
-        },
-        (accumulated) => setAiExplanation(accumulated)
-      );
-    } catch (e) {
-      setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ""}`);
-    } finally {
-      setAiLoading(false);
+    if (studyMode === "explain") {
+      setAiLoading(true);
+      setShowExplanation(true);
+      setAiExplanation("");
+      try {
+        await ai.streamExplanation(
+          {
+            question: current.question,
+            correctAnswer: current.answer,
+            userAnswer,
+            topicName: selectedTopic?.name,
+          },
+          (accumulated) => setAiExplanation(accumulated)
+        );
+      } catch (e) {
+        setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ""}`);
+      } finally {
+        setAiLoading(false);
+      }
     }
   }
 
@@ -237,7 +257,36 @@ export default function CertPassAI() {
           <>
             {/* 챕터 선택 */}
             {studyView === "chapters" && (
-              <ChapterList onSelect={handleChapterSelect} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* 모드 토글 */}
+                <div style={{ display: "flex", gap: 0, padding: 3, borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
+                  {[
+                    { id: "exam", label: "🎯 시험 모드", desc: "채점만" },
+                    { id: "explain", label: "📖 해설 모드", desc: "AI 10단계 해설" },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setStudyMode(m.id)}
+                      style={{
+                        flex: 1,
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: studyMode === m.id ? 600 : 400,
+                        cursor: "pointer",
+                        border: "none",
+                        backgroundColor: studyMode === m.id ? "#cc785c" : "transparent",
+                        color: studyMode === m.id ? "#fff" : "#666",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {m.label}
+                      <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.8 }}>({m.desc})</span>
+                    </button>
+                  ))}
+                </div>
+                <ChapterList onSelect={handleChapterSelect} />
+              </div>
             )}
 
             {/* 토픽 선택 */}
