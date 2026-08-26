@@ -1,29 +1,96 @@
-export default function QuestionCard({ question, showHint, topicName }) {
+export default function QuestionCard({ question, showHint, sessionLabel, questionNumber }) {
   if (!question) return null;
   return (
-    <div className="cp-question-card cp-fade-in" style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {topicName && (
-          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#cc785c22', color: '#cc785c', border: '1px solid #cc785c44' }}>
-            {topicName}
+    <div
+      className="cp-question-card cp-fade-in"
+      style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}
+    >
+      {/* 뱃지 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        {sessionLabel && (
+          <span
+            style={{
+              fontSize: 11,
+              padding: '3px 8px',
+              borderRadius: 20,
+              backgroundColor: '#cc785c22',
+              color: '#cc785c',
+              border: '1px solid #cc785c44',
+            }}
+          >
+            {sessionLabel}
           </span>
         )}
-        {!topicName && question.subject && (
-          <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
-            {question.subject}
+        {questionNumber != null && (
+          <span
+            style={{
+              fontSize: 11,
+              padding: '3px 8px',
+              borderRadius: 20,
+              backgroundColor: '#1a1a1a',
+              color: '#888',
+              border: '1px solid #333',
+            }}
+          >
+            {questionNumber}번
           </span>
         )}
-        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
+        <span
+          style={{
+            fontSize: 11,
+            padding: '3px 8px',
+            borderRadius: 20,
+            backgroundColor: '#1a1a1a',
+            color: '#888',
+            border: '1px solid #333',
+          }}
+        >
           {question.type}
         </span>
       </div>
 
-      <p className="cp-question-body" style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+      {/* 문제 본문 */}
+      <p
+        className="cp-question-body"
+        style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line' }}
+      >
         {question.question}
       </p>
 
+      {/* 코드 블록 */}
+      {question.code && (
+        <pre
+          style={{
+            marginTop: 16,
+            padding: '16px',
+            backgroundColor: '#1a1a1a',
+            borderRadius: 8,
+            border: '1px solid #333',
+            fontSize: 13,
+            color: '#e8906f',
+            overflowX: 'auto',
+            lineHeight: 1.6,
+            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+            whiteSpace: 'pre',
+          }}
+        >
+          {question.code}
+        </pre>
+      )}
+
+      {/* 힌트 */}
       {showHint && question.hint && (
-        <div style={{ marginTop: 16, padding: '10px 14px', backgroundColor: '#fbbf2411', borderRadius: 8, border: '1px solid #fbbf2433', fontSize: 13, color: '#fbbf24' }}>
+        <div
+          style={{
+            marginTop: 16,
+            padding: '10px 14px',
+            backgroundColor: '#fbbf2411',
+            borderRadius: 8,
+            border: '1px solid #fbbf2433',
+            fontSize: 13,
+            color: '#fbbf24',
+          }}
+        >
           💡 {question.hint}
         </div>
       )}

@@ -48,21 +48,5 @@ export function useAI() {
     return accumulated;
   }
 
-  // 토픽 ID → 새 문제 JSON 1개 반환. 로그인 시 DB에 자동 저장.
-  // options: { source: 'personal'|'shared', accessToken }
-  async function generateQuestionByTopic(topicId, options = {}) {
-    const { source = 'personal', accessToken } = options;
-    const headers = { 'Content-Type': 'application/json' };
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    const res = await fetch('/api/generate-question', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ topicId, source }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `문제 생성 실패 (${res.status})`);
-    return data.question;
-  }
-
-  return { streamExplanation, generateQuestionByTopic };
+  return { streamExplanation };
 }

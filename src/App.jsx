@@ -1,247 +1,225 @@
-import { useState } from "react";
-import QuestionCard from "./components/QuestionCard";
-import AnswerInput from "./components/AnswerInput";
-import ExplanationPanel from "./components/ExplanationPanel";
-import ShareCard from "./components/ShareCard";
-import AuthButton from "./components/AuthButton";
-import ChapterList from "./components/ChapterList";
-import TopicList from "./components/TopicList";
-import { supabase as supabaseClient } from "./lib/supabase";
-import { useAI } from "./hooks/useAI";
-import { useAuth } from "./hooks/useAuth";
-import { useWrongAnswers } from "./hooks/useWrongAnswers";
-import { codeToLabel } from "./lib/subjects";
+import { useState } from 'react';
+import QuestionCard from './components/QuestionCard';
+import AnswerInput from './components/AnswerInput';
+import ExplanationPanel from './components/ExplanationPanel';
+import YearRoundList from './components/YearRoundList';
+import { getSessionQuestions } from './data/examQuestions';
+import { useAI } from './hooks/useAI';
+import { useWrongAnswers } from './hooks/useWrongAnswers';
 
 export default function CertPassAI() {
   const ai = useAI();
-  const { user, loading, signInWithGoogle } = useAuth();
-  const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers(user);
+  const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers();
 
   // ── 탭 ────────────────────────────────────────────────────
-  const [tab, setTab] = useState("study"); // study | wrong
+  const [tab, setTab] = useState('study'); // study | wrong
 
   // ── 학습 모드 ──────────────────────────────────────────────
-  const [studyMode, setStudyMode] = useState("explain"); // exam | explain
+  const [studyMode, setStudyMode] = useState('explain'); // exam | explain
 
-  // ── 학습 뷰 상태 ──────────────────────────────────────────
-  // chapters → topics → question
-  const [studyView, setStudyView] = useState("chapters");
-  const [selectedChapter, setSelectedChapter] = useState(null);
-  const [selectedTopic, setSelectedTopic] = useState(null);
-  const [generatedQuestion, setGeneratedQuestion] = useState(null);
-  const [generating, setGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState("");
+  // ── 뷰 상태 ───────────────────────────────────────────────
+  const [studyView, setStudyView] = useState('rounds'); // rounds | question | results
 
-  // ── 세션 통계 (토픽별 리셋) ────────────────────────────────
-  const [sessionStats, setSessionStats] = useState({ correct: 0, total: 0 });
+  // ── 회차 선택 + 문제 목록 ─────────────────────────────────
+  const [selectedSession, setSelectedSession] = useState(null); // { year, round }
+  const [sessionQuestions, setSessionQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
-  // ── 문제 풀기 상태 ─────────────────────────────────────────
-  const [userAnswer, setUserAnswer] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  // ── 현재 문제 상태 ─────────────────────────────────────────
+  const [userAnswer, setUserAnswer] = useState('');
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiExplanation, setAiExplanation] = useState("");
-  const [correctCount, setCorrectCount] = useState(0);
+
+  // ── 세션 결과 (20문제 누적) ────────────────────────────────
+  const [results, setResults] = useState([]); // [{ question, userAnswer, isCorrect }]
+
+  // ── 파생 값 ───────────────────────────────────────────────
+  const current = sessionQuestions[currentIndex] || null;
+  const totalQuestions = sessionQuestions.length;
+  const isLastQuestion = currentIndex + 1 >= totalQuestions;
+  const isCorrect =
+    isSubmitted && current
+      ? userAnswer.trim().toLowerCase().includes(
+          current.answer?.split('\n')[0].trim().toLowerCase()
+        )
+      : false;
+  const totalCorrect = results.filter((r) => r.isCorrect).length;
 
   function resetQuestionState() {
-    setUserAnswer("");
-    setSubmitted(false);
+    setUserAnswer('');
+    setIsSubmitted(false);
     setShowHint(false);
     setShowExplanation(false);
-    setAiExplanation("");
-    setGenerateError("");
+    setAiExplanation('');
+    setAiLoading(false);
   }
 
-  function changeTab(nextTab) {
-    setTab(nextTab);
+  // ── 회차 선택 → 문제 로드 ─────────────────────────────────
+  function handleSessionSelect({ year, round }) {
+    setSelectedSession({ year, round });
+    setStudyView('question');
+    setCurrentIndex(0);
+    setResults([]);
     resetQuestionState();
-  }
-
-  // ── 챕터 선택 ─────────────────────────────────────────────
-  function handleChapterSelect(chapter) {
-    setSelectedChapter(chapter);
-    setStudyView("topics");
-    resetQuestionState();
-  }
-
-  // ── 토픽 선택 → DB 확인 → 없으면 AI 생성 ────────────────
-  async function handleTopicSelect(topic) {
-    setSelectedTopic(topic);
-    setGeneratedQuestion(null);
-    setGenerating(true);
-    setStudyView("question");
-    setSessionStats({ correct: 0, total: 0 });
-    resetQuestionState();
-
-    try {
-      // 1. 공유 풀에 시드된 문제 먼저 조회
-      const { data: seeded } = await supabaseClient
-        .from('questions')
-        .select('id, subject, type, question, answer, hint, explanation, keywords, source, chapter_id, topic_id')
-        .eq('source', 'shared')
-        .eq('topic_id', topic.id)
-        .limit(1)
-        .maybeSingle();
-
-      if (seeded) {
-        setGeneratedQuestion({ ...seeded, dbId: seeded.id, subject: codeToLabel(seeded.subject) });
-        return;
-      }
-
-      // 2. 없으면 AI로 새로 생성
-      const session = (await supabaseClient.auth.getSession()).data.session;
-      const q = await ai.generateQuestionByTopic(topic.id, {
-        source: "personal",
-        accessToken: session?.access_token,
-      });
-      setGeneratedQuestion({ ...q, dbId: q.id, subject: codeToLabel(q.subject) });
-    } catch (e) {
-      setGenerateError(e.message || "문제 생성에 실패했어요.");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  // ── 다음 문제 (같은 토픽 재생성) ──────────────────────────
-  async function handleNext() {
-    if (!selectedTopic || !user) return;
-    setGeneratedQuestion(null);
-    setGenerating(true);
-    resetQuestionState();
-    try {
-      const session = (await supabaseClient.auth.getSession()).data.session;
-      const q = await ai.generateQuestionByTopic(selectedTopic.id, {
-        source: "personal",
-        accessToken: session?.access_token,
-      });
-      setGeneratedQuestion({ ...q, dbId: q.id, subject: codeToLabel(q.subject) });
-    } catch (e) {
-      setGenerateError(e.message || "문제 생성에 실패했어요.");
-    } finally {
-      setGenerating(false);
-    }
+    setSessionQuestions(getSessionQuestions(year, round));
   }
 
   // ── 답안 제출 ─────────────────────────────────────────────
-  const current = generatedQuestion;
-  const isCorrect =
-    submitted &&
-    current &&
-    userAnswer.trim().includes(current.answer?.split("(")[0].trim());
-
   async function handleSubmit() {
-    if (!userAnswer.trim() || !current) return;
-    setSubmitted(true);
+    if (!userAnswer.trim() || !current || isSubmitted) return;
+    setIsSubmitted(true);
 
-    const correct = userAnswer.trim().includes(current.answer.split("(")[0].trim());
-    if (correct) {
-      setCorrectCount((c) => c + 1);
-      setSessionStats((s) => ({ correct: s.correct + 1, total: s.total + 1 }));
-    } else {
-      setSessionStats((s) => ({ ...s, total: s.total + 1 }));
+    const correct = userAnswer
+      .trim()
+      .toLowerCase()
+      .includes(current.answer?.split('\n')[0].trim().toLowerCase());
+
+    setResults((prev) => [...prev, { question: current, userAnswer, isCorrect: correct }]);
+
+    if (!correct) {
       addWrong(current, userAnswer);
     }
 
-    if (studyMode === "explain") {
-      setAiLoading(true);
+    if (studyMode === 'explain') {
       setShowExplanation(true);
-      setAiExplanation("");
+      setAiLoading(true);
+      setAiExplanation('');
       try {
         await ai.streamExplanation(
-          {
-            question: current.question,
-            correctAnswer: current.answer,
-            userAnswer,
-            topicName: selectedTopic?.name,
-          },
+          { question: current.question, correctAnswer: current.answer, userAnswer },
           (accumulated) => setAiExplanation(accumulated)
         );
       } catch (e) {
-        setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ""}`);
+        setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ''}`);
       } finally {
         setAiLoading(false);
       }
     }
   }
 
-  // ── 비로그인 / 로딩 화면 ──────────────────────────────────
-  if (loading) {
-    return (
-      <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 13, color: "#555" }}>로딩 중...</span>
-      </div>
-    );
+  // ── 다음 문제 / 결과 화면 ─────────────────────────────────
+  function handleNext() {
+    if (isLastQuestion) {
+      setStudyView('results');
+      return;
+    }
+    setCurrentIndex((i) => i + 1);
+    resetQuestionState();
   }
 
-  if (!user) {
-    return (
-      <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px 20px" }}>
-        <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #cc785c, #e8906f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, marginBottom: 20 }}>
-          🎯
-        </div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.5px" }}>CertPass AI</h1>
-        <p style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>정보처리기사 실기 AI 학습 코치</p>
-        <p style={{ fontSize: 13, color: "#555", marginBottom: 32, textAlign: "center", lineHeight: 1.7 }}>
-          241개 토픽 무한 문제 풀기<br />AI 10단계 해설로 개념까지 이해
-        </p>
-        <button
-          onClick={() => signInWithGoogle().catch((e) => alert(e.message))}
-          style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 10, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-        >
-          <svg width="18" height="18" viewBox="0 0 48 48">
-            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-          </svg>
-          Google로 시작하기
-        </button>
-        <p style={{ marginTop: 20, fontSize: 11, color: "#444" }}>로그인하면 학습 기록이 자동 저장됩니다.</p>
-      </div>
-    );
+  // ── 회차 목록으로 돌아가기 ────────────────────────────────
+  function handleBackToRounds() {
+    setStudyView('rounds');
+    setSelectedSession(null);
+    setSessionQuestions([]);
+    setCurrentIndex(0);
+    setResults([]);
+    resetQuestionState();
   }
 
   // ── 렌더 ──────────────────────────────────────────────────
   return (
-    <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", color: "#ececec" }}>
+    <div
+      style={{
+        fontFamily: "'Noto Sans KR', sans-serif",
+        backgroundColor: '#1a1a1a',
+        minHeight: '100vh',
+        color: '#ececec',
+      }}
+    >
       {/* Header */}
-      <header style={{ backgroundColor: "#1a1a1a", borderBottom: "1px solid #333", padding: "0 20px", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #cc785c, #e8906f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+      <header
+        style={{
+          backgroundColor: '#1a1a1a',
+          borderBottom: '1px solid #333',
+          padding: '0 20px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 720,
+            margin: '0 auto',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: 56,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #cc785c, #e8906f)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+              }}
+            >
               🎯
             </div>
-            <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.3px" }}>CertPass AI</span>
-            <span style={{ fontSize: 11, color: "#666", marginLeft: 4, padding: "2px 6px", backgroundColor: "#262626", borderRadius: 4, border: "1px solid #333" }}>정처기 실기</span>
+            <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>
+              CertPass AI
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: '#666',
+                marginLeft: 4,
+                padding: '2px 6px',
+                backgroundColor: '#262626',
+                borderRadius: 4,
+                border: '1px solid #333',
+              }}
+            >
+              정처기 실기
+            </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#888" }}>
-            <span style={{ color: "#cc785c" }}>🔥 {correctCount}정답</span>
-            <AuthButton />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#888' }}>
+            {totalCorrect > 0 && (
+              <span style={{ color: '#cc785c' }}>🔥 {totalCorrect}정답</span>
+            )}
           </div>
         </div>
       </header>
 
       {/* Tab Nav */}
-      <div style={{ backgroundColor: "#1a1a1a", borderBottom: "1px solid #2a2a2a", padding: "0 20px" }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", gap: 0 }}>
+      <div
+        style={{
+          backgroundColor: '#1a1a1a',
+          borderBottom: '1px solid #2a2a2a',
+          padding: '0 20px',
+        }}
+      >
+        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', gap: 0 }}>
           {[
-            { id: "study", label: "📚 문제풀기" },
-            { id: "wrong", label: `❌ 오답노트${wrongAnswers.length > 0 ? ` (${wrongAnswers.length})` : ""}` },
+            { id: 'study', label: '📚 문제풀기' },
+            {
+              id: 'wrong',
+              label: `❌ 오답노트${wrongAnswers.length > 0 ? ` (${wrongAnswers.length})` : ''}`,
+            },
           ].map((t) => (
             <button
               key={t.id}
-              onClick={() => changeTab(t.id)}
+              onClick={() => setTab(t.id)}
               style={{
-                padding: "12px 16px",
+                padding: '12px 16px',
                 fontSize: 13,
                 fontWeight: tab === t.id ? 600 : 400,
-                color: tab === t.id ? "#cc785c" : "#666",
-                background: "none",
-                border: "none",
-                borderBottom: tab === t.id ? "2px solid #cc785c" : "2px solid transparent",
-                cursor: "pointer",
-                transition: "all 0.15s",
+                color: tab === t.id ? '#cc785c' : '#666',
+                background: 'none',
+                border: 'none',
+                borderBottom: tab === t.id ? '2px solid #cc785c' : '2px solid transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
               }}
             >
               {t.label}
@@ -250,199 +228,359 @@ export default function CertPassAI() {
         </div>
       </div>
 
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
+      <main style={{ maxWidth: 720, margin: '0 auto', padding: '24px 20px' }}>
 
         {/* ── 문제풀기 탭 ── */}
-        {tab === "study" && (
+        {tab === 'study' && (
           <>
-            {/* 챕터 선택 */}
-            {studyView === "chapters" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* 회차 목록 */}
+            {studyView === 'rounds' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* 모드 토글 */}
-                <div style={{ display: "flex", gap: 0, padding: 3, borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 0,
+                    padding: 3,
+                    borderRadius: 8,
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #333',
+                  }}
+                >
                   {[
-                    { id: "exam", label: "🎯 시험 모드", desc: "채점만" },
-                    { id: "explain", label: "📖 해설 모드", desc: "AI 10단계 해설" },
+                    { id: 'exam', label: '🎯 시험 모드', desc: '채점만' },
+                    { id: 'explain', label: '📖 해설 모드', desc: 'AI 10단계 해설' },
                   ].map((m) => (
                     <button
                       key={m.id}
                       onClick={() => setStudyMode(m.id)}
                       style={{
                         flex: 1,
-                        padding: "8px 12px",
+                        padding: '8px 12px',
                         borderRadius: 6,
                         fontSize: 13,
                         fontWeight: studyMode === m.id ? 600 : 400,
-                        cursor: "pointer",
-                        border: "none",
-                        backgroundColor: studyMode === m.id ? "#cc785c" : "transparent",
-                        color: studyMode === m.id ? "#fff" : "#666",
-                        transition: "all 0.15s",
+                        cursor: 'pointer',
+                        border: 'none',
+                        backgroundColor: studyMode === m.id ? '#cc785c' : 'transparent',
+                        color: studyMode === m.id ? '#fff' : '#666',
+                        transition: 'all 0.15s',
                       }}
                     >
                       {m.label}
-                      <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.8 }}>({m.desc})</span>
+                      <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.8 }}>
+                        ({m.desc})
+                      </span>
                     </button>
                   ))}
                 </div>
-                <ChapterList onSelect={handleChapterSelect} />
+
+                <YearRoundList onSelect={handleSessionSelect} />
               </div>
             )}
 
-            {/* 토픽 선택 */}
-            {studyView === "topics" && selectedChapter && (
-              <TopicList
-                chapter={selectedChapter}
-                onSelectTopic={handleTopicSelect}
-                onBack={() => setStudyView("chapters")}
-              />
-            )}
-
             {/* 문제 풀기 */}
-            {studyView === "question" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* 브레드크럼 + 세션 통계 */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      onClick={() => { setStudyView("topics"); resetQuestionState(); setGeneratedQuestion(null); }}
-                      style={{ padding: "5px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#888" }}
-                    >
-                      ← 토픽
-                    </button>
-                    {selectedTopic && !generating && (
-                      <span style={{ fontSize: 12, color: "#555" }}>
-                        Ch.{selectedChapter?.id} · {selectedTopic.name.split("+")[0].trim()}
-                      </span>
-                    )}
-                  </div>
-                  {sessionStats.total > 0 && (
-                    <span style={{ fontSize: 12, color: sessionStats.correct === sessionStats.total ? "#4ade80" : "#888" }}>
-                      {sessionStats.correct}/{sessionStats.total} 정답
+            {studyView === 'question' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* 헤더: 뒤로가기 + 진행도 */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <button
+                    onClick={handleBackToRounds}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 6,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      backgroundColor: '#1a1a1a',
+                      border: '1px solid #333',
+                      color: '#888',
+                    }}
+                  >
+                    ← 회차 목록
+                  </button>
+                  {totalQuestions > 0 && (
+                    <span style={{ fontSize: 13, color: '#666' }}>
+                      {currentIndex + 1}{' '}
+                      <span style={{ color: '#444' }}>/ {totalQuestions}</span>
                     </span>
                   )}
                 </div>
 
-                {/* 생성 중 */}
-                {generating && (
-                  <div style={{ textAlign: "center", padding: "60px 20px", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
-                    <div style={{ fontSize: 28, marginBottom: 12 }}>✨</div>
-                    <p style={{ fontSize: 14, color: "#888" }}>AI가 문제를 생성하고 있어요...</p>
-                    <p style={{ fontSize: 12, color: "#555", marginTop: 6 }}>{selectedTopic?.name.split("+")[0].trim()}</p>
-                    <button
-                      onClick={() => { setStudyView("topics"); setGenerating(false); resetQuestionState(); }}
-                      style={{ marginTop: 20, padding: "6px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #333", color: "#666" }}
-                    >
-                      취소
-                    </button>
-                  </div>
-                )}
-
-                {/* 생성 에러 */}
-                {!generating && generateError && (
-                  <div style={{ padding: "20px", borderRadius: 12, backgroundColor: "#f8717111", border: "1px solid #f8717133", color: "#f87171" }}>
-                    <p style={{ fontSize: 14, marginBottom: 12 }}>⚠️ {generateError}</p>
-                    <button
-                      onClick={handleNext}
-                      style={{ padding: "8px 16px", borderRadius: 8, fontSize: 13, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
-                    >
-                      다시 시도
-                    </button>
-                  </div>
-                )}
-
                 {/* 문제 UI */}
-                {!generating && generatedQuestion && (
+                {current && (
                   <>
                     <QuestionCard
-                      question={generatedQuestion}
+                      question={current}
                       showHint={showHint}
-                      topicName={selectedTopic?.name.split("+")[0].trim()}
+                      sessionLabel={`${selectedSession.year}년 ${selectedSession.round}회`}
+                      questionNumber={current.number}
                     />
 
                     <AnswerInput
                       value={userAnswer}
                       onChange={setUserAnswer}
-                      submitted={submitted}
+                      submitted={isSubmitted}
                       isCorrect={isCorrect}
-                      correctAnswer={generatedQuestion.answer}
+                      correctAnswer={current.answer}
                       showHint={showHint}
-                      onToggleHint={() => setShowHint(!showHint)}
+                      onToggleHint={() => setShowHint((h) => !h)}
                       onSubmit={handleSubmit}
                       onNext={handleNext}
+                      nextLabel={isLastQuestion ? '결과 보기 →' : '다음 문제 →'}
                     />
 
                     {showExplanation && (
                       <ExplanationPanel
                         loading={aiLoading}
-                        text={aiExplanation || generatedQuestion.explanation}
+                        text={aiExplanation || current.explanation}
                       />
-                    )}
-
-                    {/* 키워드 */}
-                    {generatedQuestion.keywords?.length > 0 && (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        {generatedQuestion.keywords.map((kw) => (
-                          <span key={kw} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, backgroundColor: "#262626", border: "1px solid #333", color: "#666" }}>
-                            #{kw}
-                          </span>
-                        ))}
-                      </div>
                     )}
                   </>
                 )}
+
+                {/* 문제 없음 */}
+                {totalQuestions === 0 && (
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      padding: '60px 20px',
+                      color: '#444',
+                      backgroundColor: '#262626',
+                      borderRadius: 12,
+                      border: '1px solid #333',
+                    }}
+                  >
+                    <p style={{ fontSize: 14 }}>해당 회차 문제가 없어요</p>
+                    <button
+                      onClick={handleBackToRounds}
+                      style={{
+                        marginTop: 16,
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontSize: 13,
+                        cursor: 'pointer',
+                        backgroundColor: '#1a1a1a',
+                        border: '1px solid #333',
+                        color: '#888',
+                      }}
+                    >
+                      돌아가기
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 결과 화면 */}
+            {studyView === 'results' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* 점수 카드 */}
+                <div
+                  style={{
+                    textAlign: 'center',
+                    padding: '32px 20px',
+                    backgroundColor: '#262626',
+                    borderRadius: 12,
+                    border: '1px solid #333',
+                  }}
+                >
+                  <div
+                    style={{ fontSize: 56, fontWeight: 700, color: '#cc785c', lineHeight: 1 }}
+                  >
+                    {results.filter((r) => r.isCorrect).length}
+                  </div>
+                  <div style={{ fontSize: 18, color: '#555', marginTop: 4 }}>
+                    / {results.length}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#666', marginTop: 12 }}>
+                    {selectedSession?.year}년 {selectedSession?.round}회 완료
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color:
+                        results.filter((r) => r.isCorrect).length / results.length >= 0.6
+                          ? '#4ade80'
+                          : '#f87171',
+                      marginTop: 6,
+                    }}
+                  >
+                    {results.filter((r) => r.isCorrect).length / results.length >= 0.6
+                      ? '🎉 합격권!'
+                      : '📖 더 공부해봐요'}
+                  </div>
+                </div>
+
+                {/* 문제별 결과 목록 */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {results.map((r, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 12,
+                        padding: '12px 14px',
+                        backgroundColor: '#262626',
+                        borderRadius: 8,
+                        border: `1px solid ${r.isCorrect ? '#4ade8022' : '#f8717122'}`,
+                      }}
+                    >
+                      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>
+                        {r.isCorrect ? '✅' : '❌'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 12, color: '#555', marginBottom: 3 }}>
+                          {r.question.number}번
+                        </p>
+                        <p
+                          style={{
+                            fontSize: 13,
+                            color: '#aaa',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {r.question.question}
+                        </p>
+                        {!r.isCorrect && (
+                          <p style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                            정답:{' '}
+                            <span style={{ color: '#4ade80' }}>
+                              {r.question.answer.split('\n')[0]}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 액션 버튼 */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleBackToRounds}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      backgroundColor: '#262626',
+                      border: '1px solid #333',
+                      color: '#ececec',
+                      fontWeight: 500,
+                    }}
+                  >
+                    다른 회차 풀기
+                  </button>
+                  <button
+                    onClick={() => handleSessionSelect(selectedSession)}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                      backgroundColor: '#cc785c',
+                      border: 'none',
+                      color: '#fff',
+                      fontWeight: 600,
+                    }}
+                  >
+                    다시 풀기
+                  </button>
+                </div>
               </div>
             )}
           </>
         )}
 
         {/* ── 오답노트 탭 ── */}
-        {tab === "wrong" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {tab === 'wrong' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {wrongAnswers.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
                 <p style={{ fontSize: 40 }}>🎉</p>
-                <p style={{ fontSize: 16, color: "#666", marginTop: 12 }}>오답이 없어요!</p>
-                <p style={{ fontSize: 13, color: "#444", marginTop: 6 }}>계속 풀다 보면 여기에 모입니다.</p>
+                <p style={{ fontSize: 16, color: '#666', marginTop: 12 }}>오답이 없어요!</p>
+                <p style={{ fontSize: 13, color: '#444', marginTop: 6 }}>
+                  계속 풀다 보면 여기에 모입니다.
+                </p>
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "#666" }}>총 {wrongAnswers.length}개의 오답</span>
-                </div>
-
-                <div style={{ marginBottom: 12 }}>
-                  <ShareCard correctCount={correctCount} wrongAnswers={wrongAnswers} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 13, color: '#666' }}>
+                    총 {wrongAnswers.length}개의 오답
+                  </span>
                 </div>
 
                 {wrongAnswers.map((w) => (
-                  <div key={w.id} style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #f8717122" }}>
-                    {w.subject && (
-                      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                        <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>
-                          {w.subject}
-                        </span>
-                      </div>
-                    )}
-                    <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, marginBottom: 12 }}>{w.question}</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, backgroundColor: "#f8717111", border: "1px solid #f8717133", color: "#f87171" }}>
+                  <div
+                    key={w.id}
+                    style={{
+                      backgroundColor: '#262626',
+                      borderRadius: 12,
+                      padding: 20,
+                      border: '1px solid #f8717122',
+                    }}
+                  >
+                    <p style={{ fontSize: 14, color: '#ddd', lineHeight: 1.7, marginBottom: 12 }}>
+                      {w.question}
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          backgroundColor: '#f8717111',
+                          border: '1px solid #f8717133',
+                          color: '#f87171',
+                        }}
+                      >
                         내 답변: {w.myAnswer}
                       </div>
-                      <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, backgroundColor: "#4ade8011", border: "1px solid #4ade8033", color: "#4ade80" }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          padding: '6px 10px',
+                          borderRadius: 6,
+                          backgroundColor: '#4ade8011',
+                          border: '1px solid #4ade8033',
+                          color: '#4ade80',
+                        }}
+                      >
                         정답: {w.answer}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                       {!w.reviewed ? (
                         <button
                           onClick={() => markReviewed(w.id)}
-                          style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #4ade8044", color: "#4ade80" }}
+                          style={{
+                            padding: '7px 14px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            backgroundColor: '#1a1a1a',
+                            border: '1px solid #4ade8044',
+                            color: '#4ade80',
+                          }}
                         >
                           ✅ 복습 완료
                         </button>
                       ) : (
-                        <span style={{ padding: "7px 10px", fontSize: 12, color: "#4ade80" }}>✅ 복습됨</span>
+                        <span style={{ padding: '7px 10px', fontSize: 12, color: '#4ade80' }}>
+                          ✅ 복습됨
+                        </span>
                       )}
                     </div>
                   </div>
