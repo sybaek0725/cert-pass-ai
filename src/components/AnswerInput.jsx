@@ -8,6 +8,7 @@ export default function AnswerInput({
   showHint,
   onSubmit,
   onNext,
+  nextLabel = '다음 문제 →',
 }) {
   return (
     <div
@@ -95,7 +96,7 @@ export default function AnswerInput({
             onClick={onNext}
             style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', backgroundColor: '#cc785c', border: 'none', color: '#fff', fontWeight: 600 }}
           >
-            다음 문제 →
+            {nextLabel}
           </button>
         )}
       </div>
