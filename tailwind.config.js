@@ -4,13 +4,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        'claude-bg': '#1a1a1a',
-        'claude-surface': '#262626',
-        'claude-border': '#333333',
-        'claude-text': '#ececec',
-        'claude-muted': '#888888',
-        'claude-accent': '#cc785c',
-        'claude-accent-light': '#e8906f',
+        cp: {
+          bg:           '#1a1a1a',
+          surface:      '#262626',
+          hover:        '#2f2f2f',
+          border:       '#333333',
+          primary:      '#ececec',
+          muted:        '#888888',
+          faint:        '#666666',
+          dimmed:       '#555555',
+          accent:       '#cc785c',
+          'accent-light': '#e8906f',
+          success:      '#4ade80',
+          error:        '#f87171',
+          warning:      '#fbbf24',
+        },
       },
       fontFamily: {
         sans: ['Noto Sans KR', 'sans-serif'],
