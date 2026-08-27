@@ -1,428 +1,413 @@
-import { useState, useRef } from "react";
-import QuestionCard from "./components/QuestionCard";
-import AnswerInput from "./components/AnswerInput";
-import ExplanationPanel from "./components/ExplanationPanel";
-import ShareCard from "./components/ShareCard";
-import AuthButton from "./components/AuthButton";
-import { supabase as supabaseImport } from "./lib/supabase";
-import { useAI } from "./hooks/useAI";
-import { useAuth } from "./hooks/useAuth";
-import { useWrongAnswers } from "./hooks/useWrongAnswers";
-import { useQuestions } from "./hooks/useQuestions";
-import { parsePdf, PdfParseError } from "./lib/pdfParser";
-import { isAdminEmail } from "./lib/admin";
+import { useState } from 'react';
+import {
+  BookOpen,
+  BookX,
+  Flame,
+  Target,
+  BookOpenText,
+  ChevronLeft,
+  CheckCircle,
+  XCircle,
+  Trophy,
+  Check,
+  RefreshCw,
+  ScrollText,
+} from 'lucide-react';
+import { CertPassLogo } from './components/Logo';
+import QuestionCard from './components/QuestionCard';
+import AnswerInput from './components/AnswerInput';
+import ExplanationPanel from './components/ExplanationPanel';
+import YearRoundList from './components/YearRoundList';
+import ReleaseNotes from './components/ReleaseNotes';
+import { getSessionQuestions } from './data/examQuestions';
+import { useAI } from './hooks/useAI';
+import { useWrongAnswers } from './hooks/useWrongAnswers';
 
-// ── 색상 토큰 (Claude UI 스타일) ──────────────────────────────
-// bg: #1a1a1a / surface: #262626 / border: #333 / accent: #cc785c
-
-const SUBJECTS = [
-  { id: "all", label: "전체" },
-  { id: "sw-design", label: "소프트웨어 설계" },
-  { id: "sw-dev", label: "소프트웨어 개발" },
-  { id: "db", label: "데이터베이스" },
-  { id: "lang", label: "프로그래밍 언어" },
-  { id: "infra", label: "시스템 구축관리" },
+const TABS = [
+  { id: 'study',    label: '문제풀기',   Icon: BookOpen   },
+  { id: 'wrong',    label: '오답노트',   Icon: BookX      },
+  { id: 'updates',  label: '업데이트',   Icon: ScrollText },
 ];
 
-// ── 메인 앱 ────────────────────────────────────────────────────
+const MODES = [
+  { id: 'exam',    label: '시험 모드',   desc: '채점만',        Icon: Target },
+  { id: 'explain', label: '해설 모드',   desc: 'AI 10단계 해설', Icon: BookOpenText },
+];
+
 export default function CertPassAI() {
   const ai = useAI();
-  const { user } = useAuth();
-  const isAdmin = isAdminEmail(user?.email);
-  const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers(user);
-  const { items: questions, reload: reloadQuestions } = useQuestions(user);
-  const [tab, setTab] = useState("study"); // study | wrong | upload
-  const [sourceFilter, setSourceFilter] = useState("all"); // all | shared | personal
-  const [pdfYear, setPdfYear] = useState("");
-  const [pdfRound, setPdfRound] = useState("");
-  const [pdfAsShared, setPdfAsShared] = useState(false);
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [userAnswer, setUserAnswer] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers();
+
+  const [tab, setTab] = useState('study');
+  const [studyMode, setStudyMode] = useState('explain');
+  const [studyView, setStudyView] = useState('rounds'); // rounds | question | results
+
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionQuestions, setSessionQuestions] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const [userAnswer, setUserAnswer] = useState('');
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiExplanation, setAiExplanation] = useState("");
-  const [correctCount, setCorrectCount] = useState(0);
-  const [selectedSubject, setSelectedSubject] = useState("all");
-  const [pdfParsing, setPdfParsing] = useState(false);
-  const [pdfStatus, setPdfStatus] = useState("");
-  const [retryMode, setRetryMode] = useState(false);
-  const fileInputRef = useRef(null);
 
-  const retryPool = wrongAnswers.filter((w) => !w.reviewed);
-  const SUBJECT_LABEL_MAP = {
-    "sw-design": "소프트웨어 설계",
-    "sw-dev": "소프트웨어 개발",
-    db: "데이터베이스",
-    lang: "프로그래밍 언어",
-    infra: "시스템 구축관리",
-  };
-  // 1) source 필터: 기출(shared) / 내 PDF(personal) / 전체 (SAMPLE은 전체에만)
-  const sourceFiltered = questions.filter((q) => {
-    if (sourceFilter === "all") return true;
-    if (sourceFilter === "shared") return q.source === "shared";
-    if (sourceFilter === "personal") return q.source === "personal";
-    return true;
-  });
-  // 2) subject 필터
-  const filteredQuestions = selectedSubject === "all"
-    ? sourceFiltered
-    : sourceFiltered.filter((q) => q.subject === SUBJECT_LABEL_MAP[selectedSubject]);
+  const [results, setResults] = useState([]);
 
-  const current = retryMode ? retryPool[0] : filteredQuestions[currentIdx] || filteredQuestions[0];
-  const isCorrect = submitted && userAnswer.trim().includes(current?.answer?.split("(")[0].trim());
+  const current = sessionQuestions[currentIndex] || null;
+  const totalQuestions = sessionQuestions.length;
+  const isLastQuestion = currentIndex + 1 >= totalQuestions;
+  const isCorrect =
+    isSubmitted && current
+      ? userAnswer.trim().toLowerCase().includes(
+          current.answer?.split('\n')[0].trim().toLowerCase()
+        )
+      : false;
+  const totalCorrect = results.filter((r) => r.isCorrect).length;
 
   function resetQuestionState() {
-    setUserAnswer("");
-    setSubmitted(false);
+    setUserAnswer('');
+    setIsSubmitted(false);
     setShowHint(false);
     setShowExplanation(false);
-    setAiExplanation("");
+    setAiExplanation('');
+    setAiLoading(false);
   }
 
-  function changeTab(nextTab) {
-    setTab(nextTab);
+  function handleSessionSelect({ year, round }) {
+    setSelectedSession({ year, round });
+    setStudyView('question');
+    setCurrentIndex(0);
+    setResults([]);
     resetQuestionState();
-  }
-
-  function enterRetryMode() {
-    if (retryPool.length === 0) return;
-    setRetryMode(true);
-    setTab("study");
-    resetQuestionState();
-  }
-
-  function exitRetryMode() {
-    setRetryMode(false);
-    resetQuestionState();
+    setSessionQuestions(getSessionQuestions(year, round));
   }
 
   async function handleSubmit() {
-    if (!userAnswer.trim()) return;
-    setSubmitted(true);
+    if (!userAnswer.trim() || !current || isSubmitted) return;
+    setIsSubmitted(true);
 
-    const correct = userAnswer.trim().includes(current.answer.split("(")[0].trim());
-    if (correct) {
-      setCorrectCount((c) => c + 1);
-      if (retryMode) markReviewed(current.id);
-    } else if (!retryMode) {
-      addWrong(current, userAnswer);
-    }
+    const correct = userAnswer
+      .trim()
+      .toLowerCase()
+      .includes(current.answer?.split('\n')[0].trim().toLowerCase());
 
-    // AI 해설 스트리밍 (Vercel Function 프록시 → Gemini)
-    setAiLoading(true);
-    setShowExplanation(true);
-    setAiExplanation("");
-    try {
-      await ai.streamExplanation(
-        {
-          question: current.question,
-          correctAnswer: current.answer,
-          userAnswer,
-        },
-        (accumulated) => setAiExplanation(accumulated)
-      );
-    } catch (e) {
-      setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ""}`);
-    } finally {
-      setAiLoading(false);
+    setResults((prev) => [...prev, { question: current, userAnswer, isCorrect: correct }]);
+
+    if (!correct) addWrong(current, userAnswer);
+
+    if (studyMode === 'explain') {
+      setShowExplanation(true);
+      setAiLoading(true);
+      setAiExplanation('');
+      try {
+        await ai.streamExplanation(
+          { question: current.question, correctAnswer: current.answer, userAnswer },
+          (accumulated) => setAiExplanation(accumulated)
+        );
+      } catch (e) {
+        setAiExplanation(`⚠️ ${e.message}\n\n${current.explanation || ''}`);
+      } finally {
+        setAiLoading(false);
+      }
     }
   }
 
   function handleNext() {
-    if (retryMode) {
-      resetQuestionState();
-      return;
-    }
-    const pool = filteredQuestions;
-    const nextIdx = questions.indexOf(pool[(pool.indexOf(current) + 1) % pool.length]);
-    setCurrentIdx(nextIdx === -1 ? 0 : nextIdx);
+    if (isLastQuestion) { setStudyView('results'); return; }
+    setCurrentIndex((i) => i + 1);
     resetQuestionState();
   }
 
-  async function handlePdfUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!user) {
-      setPdfStatus("❌ PDF 업로드는 로그인이 필요해요.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-    setPdfParsing(true);
-    setPdfStatus("PDF 분석 중...");
-    try {
-      const { fullText } = await parsePdf(file);
-      setPdfStatus("AI가 유사 문제 생성 중...");
-      const wantShared = isAdmin && pdfAsShared;
-      const session = (await supabaseImport.auth.getSession()).data.session;
-      await ai.generateQuestion(fullText, {
-        source: wantShared ? "shared" : "personal",
-        year: pdfYear ? Number(pdfYear) : null,
-        round: pdfRound ? Number(pdfRound) : null,
-        accessToken: session?.access_token,
-      });
-      await reloadQuestions();
-      setPdfStatus(wantShared
-        ? "✅ 공유 풀에 1문제 추가됐어요."
-        : "✅ 내 풀에 1문제 추가됐어요.");
-      changeTab("study");
-      setSourceFilter(wantShared ? "shared" : "personal");
-      setCurrentIdx(0);
-    } catch (err) {
-      const msg = err instanceof PdfParseError ? err.message : err.message || "처리 중 오류가 발생했습니다.";
-      setPdfStatus(`❌ ${msg}`);
-    } finally {
-      setPdfParsing(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+  function handleBackToRounds() {
+    setStudyView('rounds');
+    setSelectedSession(null);
+    setSessionQuestions([]);
+    setCurrentIndex(0);
+    setResults([]);
+    resetQuestionState();
   }
 
-  // ── 렌더 ──────────────────────────────────────────────────────
+  const passRate = results.length > 0 ? totalCorrect / results.length : 0;
+
   return (
-    <div style={{ fontFamily: "'Noto Sans KR', sans-serif", backgroundColor: "#1a1a1a", minHeight: "100vh", color: "#ececec" }}>
-      {/* Header */}
-      <header style={{ backgroundColor: "#1a1a1a", borderBottom: "1px solid #333", padding: "0 20px", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #cc785c, #e8906f)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-              🎯
-            </div>
-            <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: "-0.3px" }}>CertPass AI</span>
-            <span style={{ fontSize: 11, color: "#666", marginLeft: 4, padding: "2px 6px", backgroundColor: "#262626", borderRadius: 4, border: "1px solid #333" }}>정처기 실기</span>
+    <div className="min-h-screen bg-cp-bg text-cp-primary font-sans">
+
+      {/* ── Header ── */}
+      <header className="bg-cp-bg border-b border-cp-border px-5 sticky top-0 z-50">
+        <div className="max-w-2xl mx-auto flex items-center justify-between h-14">
+          <div className="flex items-center gap-2">
+            <CertPassLogo size={28} />
+            <span className="font-bold text-base tracking-tight">CertPass AI</span>
+            <span className="text-[11px] text-cp-faint ml-1 px-1.5 py-0.5 bg-cp-surface rounded border border-cp-border">
+              정처기 실기
+            </span>
           </div>
-          <div className="cp-header-stats" style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 13, color: "#888" }}>
-            <span className="cp-only-desktop">🔥 {correctCount}문제 정답</span>
-            <span style={{ color: "#cc785c" }} className="cp-only-desktop">오답 {wrongAnswers.length}개</span>
-            <AuthButton />
+          <div className="flex items-center gap-3 text-[13px] text-cp-muted">
+            {totalCorrect > 0 && (
+              <span className="flex items-center gap-1 text-cp-accent">
+                <Flame size={14} />
+                {totalCorrect}정답
+              </span>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Tab Nav */}
-      <div style={{ backgroundColor: "#1a1a1a", borderBottom: "1px solid #2a2a2a", padding: "0 20px" }}>
-        <div style={{ maxWidth: 720, margin: "0 auto", display: "flex", gap: 0 }}>
-          {[
-            { id: "study", label: "📚 문제풀기" },
-            { id: "wrong", label: `❌ 오답노트 ${wrongAnswers.length > 0 ? `(${wrongAnswers.length})` : ""}` },
-            { id: "upload", label: "📎 PDF 업로드" },
-          ].map((t) => (
+      {/* ── Tab Nav ── */}
+      <div className="bg-cp-bg border-b border-[#2a2a2a] px-5">
+        <div className="max-w-2xl mx-auto flex">
+          {TABS.map(({ id, label, Icon }) => (
             <button
-              key={t.id}
-              onClick={() => changeTab(t.id)}
-              style={{
-                padding: "12px 16px",
-                fontSize: 13,
-                fontWeight: tab === t.id ? 600 : 400,
-                color: tab === t.id ? "#cc785c" : "#666",
-                background: "none",
-                border: "none",
-                borderBottom: tab === t.id ? "2px solid #cc785c" : "2px solid transparent",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-[13px] border-b-2 transition-all ${
+                tab === id
+                  ? 'font-semibold text-cp-accent border-cp-accent'
+                  : 'font-normal text-cp-faint border-transparent hover:text-cp-muted'
+              }`}
             >
-              {t.label}
+              <Icon size={14} />
+              {label}
+              {id === 'wrong' && wrongAnswers.length > 0 && (
+                <span className="text-[11px] text-cp-muted">({wrongAnswers.length})</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      <main className="cp-main" style={{ maxWidth: 720, margin: "0 auto", padding: "24px 20px" }}>
+      <main className="max-w-2xl mx-auto px-5 py-6">
 
         {/* ── 문제풀기 탭 ── */}
-        {tab === "study" && retryMode && retryPool.length === 0 && (
-          <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
-            <p style={{ fontSize: 40 }}>🎉</p>
-            <p style={{ fontSize: 16, color: "#888", marginTop: 12 }}>오답 복습 완료!</p>
-            <p style={{ fontSize: 13, color: "#555", marginTop: 6 }}>모든 오답을 다시 풀었어요.</p>
-            <button
-              onClick={exitRetryMode}
-              style={{ marginTop: 16, padding: "8px 18px", borderRadius: 8, fontSize: 13, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
-            >
-              일반 모드로 돌아가기
-            </button>
-          </div>
-        )}
-        {tab === "study" && !retryMode && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* 소스 세그먼트 (로그인 + 일반 모드) */}
-            {user && (
-              <div style={{ display: "flex", gap: 0, padding: 3, borderRadius: 8, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
-                {[
-                  { id: "all", label: "전체" },
-                  { id: "shared", label: "📚 기출" },
-                  { id: "personal", label: "🆕 내 PDF" },
-                ].map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => { setSourceFilter(s.id); setCurrentIdx(0); }}
-                    style={{
-                      flex: 1,
-                      padding: "6px 10px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: sourceFilter === s.id ? 600 : 400,
-                      cursor: "pointer",
-                      border: "none",
-                      backgroundColor: sourceFilter === s.id ? "#cc785c" : "transparent",
-                      color: sourceFilter === s.id ? "#fff" : "#888",
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {/* 과목 필터 */}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {SUBJECTS.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => { setSelectedSubject(s.id); setCurrentIdx(0); }}
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 20,
-                    fontSize: 12,
-                    cursor: "pointer",
-                    border: selectedSubject === s.id ? "1px solid #cc785c" : "1px solid #333",
-                    backgroundColor: selectedSubject === s.id ? "#cc785c22" : "#262626",
-                    color: selectedSubject === s.id ? "#cc785c" : "#888",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-
-            {filteredQuestions.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "40px 20px", color: "#555", backgroundColor: "#262626", borderRadius: 12, border: "1px solid #333" }}>
-                <p style={{ fontSize: 32 }}>📭</p>
-                <p style={{ fontSize: 14, color: "#888", marginTop: 10 }}>해당 조건에 맞는 문제가 없어요.</p>
-                <p style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-                  {sourceFilter === "shared"
-                    ? "공유 풀에 아직 문제가 시드되지 않았어요."
-                    : sourceFilter === "personal"
-                      ? "PDF 업로드로 본인 풀을 채워보세요."
-                      : "과목 필터를 바꿔보세요."}
-                </p>
-                {(sourceFilter === "shared" || sourceFilter === "personal") && (
-                  <button
-                    onClick={() => changeTab("upload")}
-                    style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff", fontWeight: 600 }}
-                  >
-                    📎 PDF 업로드하러 가기
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-            {/* 진행률 */}
-            <div style={{ fontSize: 12, color: "#555", display: "flex", justifyContent: "space-between" }}>
-              <span>{filteredQuestions.indexOf(current) + 1} / {filteredQuestions.length} 문제</span>
-              <span style={{ color: "#4ade80" }}>정답률 {questions.length > 0 ? Math.round((correctCount / Math.max(currentIdx, 1)) * 100) : 0}%</span>
-            </div>
-
-            <QuestionCard question={current} showHint={showHint} />
-
-            <AnswerInput
-              value={userAnswer}
-              onChange={setUserAnswer}
-              submitted={submitted}
-              isCorrect={isCorrect}
-              correctAnswer={current.answer}
-              showHint={showHint}
-              onToggleHint={() => setShowHint(!showHint)}
-              onSubmit={handleSubmit}
-              onNext={handleNext}
-            />
-
-            {showExplanation && (
-              <ExplanationPanel
-                loading={aiLoading}
-                text={aiExplanation || current.explanation}
-              />
-            )}
-
-            {/* 키워드 태그 */}
-            {current.keywords && (
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {current.keywords.map((kw) => (
-                  <span key={kw} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 4, backgroundColor: "#262626", border: "1px solid #333", color: "#666" }}>
-                    #{kw}
-                  </span>
-                ))}
-              </div>
-            )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* ── 오답노트 탭 ── */}
-        {tab === "wrong" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {wrongAnswers.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}>
-                <p style={{ fontSize: 40 }}>🎉</p>
-                <p style={{ fontSize: 16, color: "#666", marginTop: 12 }}>오답이 없어요!</p>
-                <p style={{ fontSize: 13, color: "#444", marginTop: 6 }}>계속 풀다 보면 여기에 모입니다.</p>
-              </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 13, color: "#666" }}>
-                    총 {wrongAnswers.length}개의 오답 · {retryPool.length}개 미복습
-                  </span>
-                  {retryPool.length > 0 && (
+        {tab === 'study' && (
+          <>
+            {/* 회차 목록 */}
+            {studyView === 'rounds' && (
+              <div className="flex flex-col gap-4">
+                {/* 모드 토글 */}
+                <div className="flex p-0.5 rounded-lg bg-cp-bg border border-cp-border">
+                  {MODES.map(({ id, label, desc, Icon }) => (
                     <button
-                      onClick={enterRetryMode}
-                      style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", backgroundColor: "#cc785c", border: "none", color: "#fff" }}
+                      key={id}
+                      onClick={() => setStudyMode(id)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-[13px] transition-all ${
+                        studyMode === id
+                          ? 'bg-cp-accent text-white font-semibold'
+                          : 'bg-transparent text-cp-faint hover:text-cp-muted'
+                      }`}
                     >
-                      🔁 오답만 다시 풀기 ({retryPool.length})
+                      <Icon size={13} />
+                      {label}
+                      <span className="text-[11px] opacity-75">({desc})</span>
                     </button>
+                  ))}
+                </div>
+
+                <YearRoundList onSelect={handleSessionSelect} />
+              </div>
+            )}
+
+            {/* 문제 풀기 */}
+            {studyView === 'question' && (
+              <div className="flex flex-col gap-4">
+                {/* 진행도 헤더 */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handleBackToRounds}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[12px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
+                  >
+                    <ChevronLeft size={12} />
+                    회차 목록
+                  </button>
+                  {totalQuestions > 0 && (
+                    <span className="text-[13px] text-cp-faint">
+                      {currentIndex + 1}{' '}
+                      <span className="text-[#444]">/ {totalQuestions}</span>
+                    </span>
                   )}
                 </div>
 
-                <div style={{ marginTop: 8, marginBottom: 12 }}>
-                  <ShareCard correctCount={correctCount} wrongAnswers={wrongAnswers} />
+                {/* 문제 UI */}
+                {current && (
+                  <>
+                    <QuestionCard
+                      question={current}
+                      showHint={showHint}
+                      sessionLabel={`${selectedSession.year}년 ${selectedSession.round}회`}
+                      questionNumber={current.number}
+                    />
+                    <AnswerInput
+                      value={userAnswer}
+                      onChange={setUserAnswer}
+                      submitted={isSubmitted}
+                      isCorrect={isCorrect}
+                      correctAnswer={current.answer}
+                      showHint={showHint}
+                      onToggleHint={() => setShowHint((h) => !h)}
+                      onSubmit={handleSubmit}
+                      onNext={handleNext}
+                      nextLabel={isLastQuestion ? '결과 보기 →' : '다음 문제 →'}
+                    />
+                    {showExplanation && (
+                      <ExplanationPanel
+                        loading={aiLoading}
+                        text={aiExplanation || current.explanation}
+                      />
+                    )}
+                  </>
+                )}
+
+                {/* 문제 없음 */}
+                {totalQuestions === 0 && (
+                  <div className="text-center py-16 px-5 bg-cp-surface rounded-xl border border-cp-border">
+                    <p className="text-[14px] text-cp-faint">해당 회차 문제가 없어요</p>
+                    <button
+                      onClick={handleBackToRounds}
+                      className="mt-4 px-4 py-2 rounded-lg text-[13px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
+                    >
+                      돌아가기
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 결과 화면 */}
+            {studyView === 'results' && (
+              <div className="flex flex-col gap-4">
+                {/* 점수 카드 */}
+                <div className="text-center py-8 px-5 bg-cp-surface rounded-xl border border-cp-border">
+                  <div className="text-[56px] font-bold text-cp-accent leading-none">
+                    {totalCorrect}
+                  </div>
+                  <div className="text-lg text-cp-dimmed mt-1">/ {results.length}</div>
+                  <div className="text-[13px] text-cp-faint mt-3">
+                    {selectedSession?.year}년 {selectedSession?.round}회 완료
+                  </div>
+                  <div
+                    className={`text-[13px] mt-2 flex items-center justify-center gap-1 ${
+                      passRate >= 0.6 ? 'text-cp-success' : 'text-cp-error'
+                    }`}
+                  >
+                    {passRate >= 0.6 ? (
+                      <><Trophy size={13} /> 합격권!</>
+                    ) : (
+                      <><BookOpen size={13} /> 더 공부해봐요</>
+                    )}
+                  </div>
                 </div>
 
-a                {wrongAnswers.map((w) => (
-                  <div key={w.id} style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #f8717122" }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 11, padding: "3px 8px", borderRadius: 20, backgroundColor: "#1a1a1a", color: "#888", border: "1px solid #333" }}>{w.subject}</span>
+                {/* 문제별 결과 */}
+                <div className="flex flex-col gap-1.5">
+                  {results.map((r, i) => (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-3 px-3.5 py-3 bg-cp-surface rounded-lg border ${
+                        r.isCorrect ? 'border-cp-success/15' : 'border-cp-error/15'
+                      }`}
+                    >
+                      {r.isCorrect ? (
+                        <CheckCircle size={16} className="text-cp-success mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <XCircle size={16} className="text-cp-error mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-cp-dimmed mb-0.5">
+                          {r.question.number}번
+                        </p>
+                        <p className="text-[13px] text-cp-muted truncate">
+                          {r.question.question}
+                        </p>
+                        {!r.isCorrect && (
+                          <p className="text-[12px] text-cp-muted mt-1">
+                            정답:{' '}
+                            <span className="text-cp-success">
+                              {r.question.answer.split('\n')[0]}
+                            </span>
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <p style={{ fontSize: 14, color: "#ddd", lineHeight: 1.7, marginBottom: 12 }}>{w.question}</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, backgroundColor: "#f8717111", border: "1px solid #f8717133", color: "#f87171" }}>
+                  ))}
+                </div>
+
+                {/* 액션 버튼 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleBackToRounds}
+                    className="flex-1 px-4 py-3 rounded-lg text-[13px] font-medium bg-cp-surface border border-cp-border text-cp-primary hover:border-cp-muted transition-colors"
+                  >
+                    다른 회차 풀기
+                  </button>
+                  <button
+                    onClick={() => handleSessionSelect(selectedSession)}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg text-[13px] font-semibold bg-cp-accent text-white hover:bg-cp-accent-light transition-colors"
+                  >
+                    <RefreshCw size={13} />
+                    다시 풀기
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── 업데이트 탭 ── */}
+        {tab === 'updates' && <ReleaseNotes />}
+
+        {/* ── 오답노트 탭 ── */}
+        {tab === 'wrong' && (
+          <div className="flex flex-col gap-3">
+            {wrongAnswers.length === 0 ? (
+              <div className="text-center py-16 px-5">
+                <div className="flex justify-center">
+                  <Trophy size={40} className="text-cp-border" />
+                </div>
+                <p className="text-base text-cp-faint mt-4">오답이 없어요!</p>
+                <p className="text-[13px] text-[#444] mt-1.5">
+                  계속 풀다 보면 여기에 모입니다.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] text-cp-faint">
+                    총 {wrongAnswers.length}개의 오답
+                  </span>
+                </div>
+
+                {wrongAnswers.map((w) => (
+                  <div
+                    key={w.id}
+                    className="bg-cp-surface rounded-xl p-5 border border-cp-error/15"
+                  >
+                    <p className="text-[14px] text-[#ddd] leading-relaxed mb-3">
+                      {w.question}
+                    </p>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-[12px] px-2.5 py-1.5 rounded-md bg-cp-error/10 border border-cp-error/20 text-cp-error">
                         내 답변: {w.myAnswer}
                       </div>
-                      <div style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, backgroundColor: "#4ade8011", border: "1px solid #4ade8033", color: "#4ade80" }}>
+                      <div className="text-[12px] px-2.5 py-1.5 rounded-md bg-cp-success/10 border border-cp-success/20 text-cp-success">
                         정답: {w.answer}
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                      <button
-                        onClick={() => {
-                          const idx = questions.findIndex((q) => q.id === w.id);
-                          if (idx !== -1) { setCurrentIdx(idx); changeTab("study"); }
-                        }}
-                        style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #cc785c44", color: "#cc785c" }}
-                      >
-                        다시 풀기 →
-                      </button>
-                      {!w.reviewed && (
+                    <div className="flex gap-2 mt-3">
+                      {!w.reviewed ? (
                         <button
                           onClick={() => markReviewed(w.id)}
-                          style={{ padding: "7px 14px", borderRadius: 8, fontSize: 12, cursor: "pointer", backgroundColor: "#1a1a1a", border: "1px solid #4ade8044", color: "#4ade80" }}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] bg-cp-bg border border-cp-success/30 text-cp-success hover:border-cp-success/60 transition-colors"
                         >
-                          ✅ 복습 완료
+                          <Check size={12} />
+                          복습 완료
                         </button>
-                      )}
-                      {w.reviewed && (
-                        <span style={{ padding: "7px 10px", fontSize: 12, color: "#4ade80" }}>✅ 복습됨</span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 text-[12px] text-cp-success px-2.5 py-1.5">
+                          <CheckCircle size={12} />
+                          복습됨
+                        </span>
                       )}
                     </div>
                   </div>
@@ -431,109 +416,7 @@ a                {wrongAnswers.map((w) => (
             )}
           </div>
         )}
-
-        {/* ── PDF 업로드 탭 ── */}
-        {tab === "upload" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ backgroundColor: "#262626", borderRadius: 12, padding: 24, border: "1px solid #333" }}>
-              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>📎 기출 PDF 업로드</h3>
-              <p style={{ fontSize: 13, color: "#888", lineHeight: 1.7, marginBottom: 20 }}>
-                큐넷에서 다운받은 기출문제 PDF를 업로드하면<br />
-                AI가 저작권 안전한 유사 문제로 재생성해드려요.
-              </p>
-
-              {/* 회차/연도 + 관리자 공유 토글 */}
-              {user && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16, padding: 14, borderRadius: 10, backgroundColor: "#1a1a1a", border: "1px solid #2a2a2a" }}>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <label style={{ flex: 1, fontSize: 12, color: "#888" }}>
-                      연도 (선택)
-                      <input
-                        type="number"
-                        value={pdfYear}
-                        onChange={(e) => setPdfYear(e.target.value)}
-                        placeholder="예: 2025"
-                        style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 13 }}
-                      />
-                    </label>
-                    <label style={{ flex: 1, fontSize: 12, color: "#888" }}>
-                      회차 (선택)
-                      <input
-                        type="number"
-                        value={pdfRound}
-                        onChange={(e) => setPdfRound(e.target.value)}
-                        placeholder="예: 1"
-                        style={{ width: "100%", marginTop: 4, padding: "6px 8px", borderRadius: 6, border: "1px solid #333", backgroundColor: "#262626", color: "#ececec", fontSize: 13 }}
-                      />
-                    </label>
-                  </div>
-                  {isAdmin && (
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#e8906f", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={pdfAsShared}
-                        onChange={(e) => setPdfAsShared(e.target.checked)}
-                      />
-                      🌐 공유 풀(전 사용자 공개)에 추가
-                    </label>
-                  )}
-                </div>
-              )}
-              {!user && (
-                <p style={{ fontSize: 12, color: "#fbbf24", marginBottom: 12 }}>
-                  ⚠ PDF 업로드 결과를 영구 저장하려면 Google 로그인이 필요해요.
-                </p>
-              )}
-
-              <input type="file" ref={fileInputRef} accept=".pdf" onChange={handlePdfUpload} style={{ display: "none" }} />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={pdfParsing}
-                style={{
-                  width: "100%", padding: "40px 20px", borderRadius: 12, fontSize: 14,
-                  cursor: pdfParsing ? "default" : "pointer",
-                  backgroundColor: "#1a1a1a", border: "2px dashed #333",
-                  color: "#555", textAlign: "center", transition: "all 0.15s",
-                }}
-              >
-                {pdfParsing ? (
-                  <span style={{ color: "#cc785c" }}>{pdfStatus}</span>
-                ) : (
-                  <>
-                    <p style={{ fontSize: 28, marginBottom: 8 }}>📄</p>
-                    <p>PDF 파일을 클릭해서 선택하세요</p>
-                    <p style={{ fontSize: 12, marginTop: 4 }}>.pdf 파일만 지원</p>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {pdfStatus.includes("완료") && (
-              <div style={{ padding: "14px 18px", borderRadius: 10, backgroundColor: "#4ade8011", border: "1px solid #4ade8033", color: "#4ade80", fontSize: 13 }}>
-                {pdfStatus}
-              </div>
-            )}
-
-            <div style={{ backgroundColor: "#262626", borderRadius: 12, padding: 20, border: "1px solid #333" }}>
-              <p style={{ fontSize: 12, color: "#555", fontWeight: 600, marginBottom: 10 }}>⚠️ 저작권 안내</p>
-              <p style={{ fontSize: 12, color: "#555", lineHeight: 1.8 }}>
-                업로드된 PDF는 서버에 저장되지 않습니다.<br />
-                AI가 문제 유형을 파악한 뒤 완전히 새로운 유사 문제를 생성하므로 저작권 문제가 없습니다.
-              </p>
-            </div>
-          </div>
-        )}
       </main>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50% { opacity: 1; transform: scale(1); }
-        }
-        textarea:focus { border-color: #cc785c !important; box-shadow: 0 0 0 2px #cc785c22; }
-        button:hover { opacity: 0.85; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-      `}</style>
     </div>
   );
 }

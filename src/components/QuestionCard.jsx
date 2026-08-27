@@ -1,23 +1,43 @@
-export default function QuestionCard({ question, showHint }) {
+import { Lightbulb } from 'lucide-react';
+
+export default function QuestionCard({ question, showHint, sessionLabel, questionNumber }) {
   if (!question) return null;
   return (
-    <div className="cp-question-card cp-fade-in" style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#1a1a1a', color: '#888', border: '1px solid #333' }}>
-          {question.subject}
-        </span>
-        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, backgroundColor: '#cc785c22', color: '#e8906f', border: '1px solid #cc785c44' }}>
+    <div className="cp-fade-in bg-cp-surface rounded-xl p-6 border border-cp-border">
+      {/* Badges */}
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
+        {sessionLabel && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-accent/10 text-cp-accent border border-cp-accent/30">
+            {sessionLabel}
+          </span>
+        )}
+        {questionNumber != null && (
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-bg text-cp-muted border border-cp-border">
+            {questionNumber}번
+          </span>
+        )}
+        <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-bg text-cp-muted border border-cp-border">
           {question.type}
         </span>
       </div>
 
-      <p className="cp-question-body" style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line', fontFamily: 'monospace' }}>
+      {/* Question text */}
+      <p className="text-[15px] leading-relaxed text-[#ddd] whitespace-pre-line">
         {question.question}
       </p>
 
+      {/* Code block */}
+      {question.code && (
+        <pre className="mt-4 p-4 bg-cp-bg rounded-lg border border-cp-border text-[13px] text-cp-accent-light overflow-x-auto leading-relaxed font-mono whitespace-pre">
+          {question.code}
+        </pre>
+      )}
+
+      {/* Hint */}
       {showHint && question.hint && (
-        <div style={{ marginTop: 16, padding: '10px 14px', backgroundColor: '#fbbf2411', borderRadius: 8, border: '1px solid #fbbf2433', fontSize: 13, color: '#fbbf24' }}>
-          💡 {question.hint}
+        <div className="mt-4 p-3 bg-cp-warning/10 rounded-lg border border-cp-warning/30 text-[13px] text-cp-warning flex items-start gap-2">
+          <Lightbulb size={14} className="mt-0.5 flex-shrink-0" />
+          {question.hint}
         </div>
       )}
     </div>

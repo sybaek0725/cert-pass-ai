@@ -1,3 +1,5 @@
+import { Lightbulb, Send, CheckCircle, XCircle } from 'lucide-react';
+
 export default function AnswerInput({
   value,
   onChange,
@@ -8,94 +10,81 @@ export default function AnswerInput({
   showHint,
   onSubmit,
   onNext,
+  nextLabel = '다음 문제 →',
 }) {
   return (
     <div
-      style={{
-        backgroundColor: '#262626',
-        borderRadius: 12,
-        padding: 20,
-        border: submitted
+      className={`bg-cp-surface rounded-xl p-5 border transition-colors ${
+        submitted
           ? isCorrect
-            ? '1px solid #4ade8055'
-            : '1px solid #f8717155'
-          : '1px solid #333',
-      }}
+            ? 'border-cp-success/35'
+            : 'border-cp-error/35'
+          : 'border-cp-border'
+      }`}
     >
-      <label style={{ fontSize: 12, color: '#666', marginBottom: 8, display: 'block' }}>내 답변</label>
+      <label className="text-[12px] text-cp-faint mb-2 block">내 답변</label>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={submitted}
         placeholder="답을 입력하세요..."
-        style={{
-          width: '100%',
-          minHeight: 80,
-          backgroundColor: '#1a1a1a',
-          border: '1px solid #333',
-          borderRadius: 8,
-          padding: '10px 12px',
-          color: '#ececec',
-          fontSize: 14,
-          resize: 'vertical',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
+        className="w-full min-h-[80px] bg-cp-bg border border-cp-border rounded-lg px-3 py-2.5 text-cp-primary text-[14px] resize-y outline-none focus:border-cp-accent transition-colors disabled:opacity-60 placeholder:text-cp-dimmed"
       />
 
       {submitted && (
         <div
-          style={{
-            marginTop: 12,
-            padding: '10px 14px',
-            borderRadius: 8,
-            backgroundColor: isCorrect ? '#4ade8011' : '#f8717111',
-            border: `1px solid ${isCorrect ? '#4ade8044' : '#f8717144'}`,
-          }}
+          className={`mt-3 px-3.5 py-2.5 rounded-lg border ${
+            isCorrect
+              ? 'bg-cp-success/5 border-cp-success/25'
+              : 'bg-cp-error/5 border-cp-error/25'
+          }`}
         >
-          <p style={{ fontSize: 13, color: isCorrect ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-            {isCorrect ? '✅ 정답입니다!' : '❌ 오답입니다'}
+          <p
+            className={`text-[13px] font-semibold flex items-center gap-1.5 ${
+              isCorrect ? 'text-cp-success' : 'text-cp-error'
+            }`}
+          >
+            {isCorrect ? (
+              <><CheckCircle size={14} /> 정답입니다!</>
+            ) : (
+              <><XCircle size={14} /> 오답입니다</>
+            )}
           </p>
-          <p style={{ fontSize: 13, color: '#888', marginTop: 4 }}>
-            정답: <span style={{ color: '#ececec', fontWeight: 600 }}>{correctAnswer}</span>
+          <p className="text-[13px] text-cp-muted mt-1">
+            정답: <span className="text-cp-primary font-semibold">{correctAnswer}</span>
           </p>
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div className="flex gap-2 mt-3">
         {!submitted ? (
           <>
             <button
               onClick={onToggleHint}
-              style={{ padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', backgroundColor: '#1a1a1a', border: '1px solid #333', color: '#888' }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
             >
-              {showHint ? '힌트 숨기기' : '💡 힌트'}
+              <Lightbulb size={13} />
+              {showHint ? '힌트 숨기기' : '힌트'}
             </button>
             <button
               onClick={onSubmit}
               disabled={!value.trim()}
-              style={{
-                flex: 1,
-                padding: '8px 16px',
-                borderRadius: 8,
-                fontSize: 13,
-                cursor: 'pointer',
-                backgroundColor: value.trim() ? '#cc785c' : '#333',
-                border: 'none',
-                color: value.trim() ? '#fff' : '#555',
-                fontWeight: 600,
-                transition: 'all 0.15s',
-              }}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
+                value.trim()
+                  ? 'bg-cp-accent text-white hover:bg-cp-accent-light'
+                  : 'bg-cp-border text-cp-dimmed cursor-not-allowed'
+              }`}
             >
+              <Send size={13} />
               제출하기
             </button>
           </>
         ) : (
           <button
             onClick={onNext}
-            style={{ flex: 1, padding: '8px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer', backgroundColor: '#cc785c', border: 'none', color: '#fff', fontWeight: 600 }}
+            className="flex-1 px-4 py-2 rounded-lg text-[13px] font-semibold bg-cp-accent text-white hover:bg-cp-accent-light transition-colors"
           >
-            다음 문제 →
+            {nextLabel}
           </button>
         )}
       </div>
