@@ -11,19 +11,22 @@ import {
   Trophy,
   Check,
   RefreshCw,
+  ScrollText,
 } from 'lucide-react';
 import { CertPassLogo } from './components/Logo';
 import QuestionCard from './components/QuestionCard';
 import AnswerInput from './components/AnswerInput';
 import ExplanationPanel from './components/ExplanationPanel';
 import YearRoundList from './components/YearRoundList';
+import ReleaseNotes from './components/ReleaseNotes';
 import { getSessionQuestions } from './data/examQuestions';
 import { useAI } from './hooks/useAI';
 import { useWrongAnswers } from './hooks/useWrongAnswers';
 
 const TABS = [
-  { id: 'study', label: '문제풀기', Icon: BookOpen },
-  { id: 'wrong', label: '오답노트', Icon: BookX },
+  { id: 'study',    label: '문제풀기',   Icon: BookOpen   },
+  { id: 'wrong',    label: '오답노트',   Icon: BookX      },
+  { id: 'updates',  label: '업데이트',   Icon: ScrollText },
 ];
 
 const MODES = [
@@ -350,6 +353,9 @@ export default function CertPassAI() {
             )}
           </>
         )}
+
+        {/* ── 업데이트 탭 ── */}
+        {tab === 'updates' && <ReleaseNotes />}
 
         {/* ── 오답노트 탭 ── */}
         {tab === 'wrong' && (
