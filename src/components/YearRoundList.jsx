@@ -1,3 +1,4 @@
+import { ChevronRight, Inbox } from 'lucide-react';
 import { getSessionList } from '../data/examQuestions';
 
 export default function YearRoundList({ onSelect }) {
@@ -14,10 +15,12 @@ export default function YearRoundList({ onSelect }) {
 
   if (years.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
-        <p style={{ fontSize: 40 }}>📭</p>
-        <p style={{ fontSize: 14, color: '#666', marginTop: 12 }}>기출 데이터가 없어요</p>
-        <p style={{ fontSize: 12, color: '#444', marginTop: 6 }}>
+      <div className="text-center py-16 px-5">
+        <div className="flex justify-center mb-3">
+          <Inbox size={40} className="text-cp-border" />
+        </div>
+        <p className="text-[14px] text-cp-faint mt-3">기출 데이터가 없어요</p>
+        <p className="text-[12px] text-[#444] mt-1.5">
           src/data/examQuestions.js에 문제를 추가해주세요
         </p>
       </div>
@@ -25,46 +28,26 @@ export default function YearRoundList({ onSelect }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="flex flex-col gap-5">
       {years.map((year) => (
         <div key={year}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: '#555',
-              marginBottom: 8,
-              letterSpacing: '0.5px',
-            }}
-          >
+          <div className="text-[12px] font-semibold text-cp-dimmed mb-2 tracking-wide">
             {year}년
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="flex flex-col gap-1.5">
             {grouped[year].map(({ round, count }) => (
               <button
                 key={round}
                 onClick={() => onSelect({ year: Number(year), round })}
-                style={{
-                  padding: '14px 16px',
-                  backgroundColor: '#262626',
-                  border: '1px solid #333',
-                  borderRadius: 8,
-                  color: '#ececec',
-                  fontSize: 14,
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  transition: 'border-color 0.15s',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#cc785c')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#333')}
+                className="group px-4 py-3.5 bg-cp-surface border border-cp-border rounded-lg text-cp-primary text-[14px] text-left flex justify-between items-center hover:border-cp-accent transition-colors"
               >
-                <span style={{ fontWeight: 500 }}>
+                <span className="font-medium">
                   {year}년 {round}회 기출
                 </span>
-                <span style={{ fontSize: 12, color: '#555' }}>{count}문제 →</span>
+                <span className="flex items-center gap-1 text-[12px] text-cp-dimmed group-hover:text-cp-muted transition-colors">
+                  {count}문제
+                  <ChevronRight size={12} />
+                </span>
               </button>
             ))}
           </div>

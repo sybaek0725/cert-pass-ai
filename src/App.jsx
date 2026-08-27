@@ -1,4 +1,18 @@
 import { useState } from 'react';
+import {
+  BookOpen,
+  BookX,
+  Flame,
+  Target,
+  BookOpenText,
+  ChevronLeft,
+  CheckCircle,
+  XCircle,
+  Trophy,
+  Check,
+  RefreshCw,
+} from 'lucide-react';
+import { CertPassLogo } from './components/Logo';
 import QuestionCard from './components/QuestionCard';
 import AnswerInput from './components/AnswerInput';
 import ExplanationPanel from './components/ExplanationPanel';
@@ -7,25 +21,28 @@ import { getSessionQuestions } from './data/examQuestions';
 import { useAI } from './hooks/useAI';
 import { useWrongAnswers } from './hooks/useWrongAnswers';
 
+const TABS = [
+  { id: 'study', label: '문제풀기', Icon: BookOpen },
+  { id: 'wrong', label: '오답노트', Icon: BookX },
+];
+
+const MODES = [
+  { id: 'exam',    label: '시험 모드',   desc: '채점만',        Icon: Target },
+  { id: 'explain', label: '해설 모드',   desc: 'AI 10단계 해설', Icon: BookOpenText },
+];
+
 export default function CertPassAI() {
   const ai = useAI();
   const { items: wrongAnswers, addWrong, markReviewed } = useWrongAnswers();
 
-  // ── 탭 ────────────────────────────────────────────────────
-  const [tab, setTab] = useState('study'); // study | wrong
-
-  // ── 학습 모드 ──────────────────────────────────────────────
-  const [studyMode, setStudyMode] = useState('explain'); // exam | explain
-
-  // ── 뷰 상태 ───────────────────────────────────────────────
+  const [tab, setTab] = useState('study');
+  const [studyMode, setStudyMode] = useState('explain');
   const [studyView, setStudyView] = useState('rounds'); // rounds | question | results
 
-  // ── 회차 선택 + 문제 목록 ─────────────────────────────────
-  const [selectedSession, setSelectedSession] = useState(null); // { year, round }
+  const [selectedSession, setSelectedSession] = useState(null);
   const [sessionQuestions, setSessionQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // ── 현재 문제 상태 ─────────────────────────────────────────
   const [userAnswer, setUserAnswer] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showHint, setShowHint] = useState(false);
@@ -33,10 +50,8 @@ export default function CertPassAI() {
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
-  // ── 세션 결과 (20문제 누적) ────────────────────────────────
-  const [results, setResults] = useState([]); // [{ question, userAnswer, isCorrect }]
+  const [results, setResults] = useState([]);
 
-  // ── 파생 값 ───────────────────────────────────────────────
   const current = sessionQuestions[currentIndex] || null;
   const totalQuestions = sessionQuestions.length;
   const isLastQuestion = currentIndex + 1 >= totalQuestions;
@@ -57,7 +72,6 @@ export default function CertPassAI() {
     setAiLoading(false);
   }
 
-  // ── 회차 선택 → 문제 로드 ─────────────────────────────────
   function handleSessionSelect({ year, round }) {
     setSelectedSession({ year, round });
     setStudyView('question');
@@ -67,7 +81,6 @@ export default function CertPassAI() {
     setSessionQuestions(getSessionQuestions(year, round));
   }
 
-  // ── 답안 제출 ─────────────────────────────────────────────
   async function handleSubmit() {
     if (!userAnswer.trim() || !current || isSubmitted) return;
     setIsSubmitted(true);
@@ -79,9 +92,7 @@ export default function CertPassAI() {
 
     setResults((prev) => [...prev, { question: current, userAnswer, isCorrect: correct }]);
 
-    if (!correct) {
-      addWrong(current, userAnswer);
-    }
+    if (!correct) addWrong(current, userAnswer);
 
     if (studyMode === 'explain') {
       setShowExplanation(true);
@@ -100,17 +111,12 @@ export default function CertPassAI() {
     }
   }
 
-  // ── 다음 문제 / 결과 화면 ─────────────────────────────────
   function handleNext() {
-    if (isLastQuestion) {
-      setStudyView('results');
-      return;
-    }
+    if (isLastQuestion) { setStudyView('results'); return; }
     setCurrentIndex((i) => i + 1);
     resetQuestionState();
   }
 
-  // ── 회차 목록으로 돌아가기 ────────────────────────────────
   function handleBackToRounds() {
     setStudyView('rounds');
     setSelectedSession(null);
@@ -120,157 +126,78 @@ export default function CertPassAI() {
     resetQuestionState();
   }
 
-  // ── 렌더 ──────────────────────────────────────────────────
+  const passRate = results.length > 0 ? totalCorrect / results.length : 0;
+
   return (
-    <div
-      style={{
-        fontFamily: "'Noto Sans KR', sans-serif",
-        backgroundColor: '#1a1a1a',
-        minHeight: '100vh',
-        color: '#ececec',
-      }}
-    >
-      {/* Header */}
-      <header
-        style={{
-          backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #333',
-          padding: '0 20px',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 720,
-            margin: '0 auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            height: 56,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                background: 'linear-gradient(135deg, #cc785c, #e8906f)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-              }}
-            >
-              🎯
-            </div>
-            <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }}>
-              CertPass AI
-            </span>
-            <span
-              style={{
-                fontSize: 11,
-                color: '#666',
-                marginLeft: 4,
-                padding: '2px 6px',
-                backgroundColor: '#262626',
-                borderRadius: 4,
-                border: '1px solid #333',
-              }}
-            >
+    <div className="min-h-screen bg-cp-bg text-cp-primary font-sans">
+
+      {/* ── Header ── */}
+      <header className="bg-cp-bg border-b border-cp-border px-5 sticky top-0 z-50">
+        <div className="max-w-2xl mx-auto flex items-center justify-between h-14">
+          <div className="flex items-center gap-2">
+            <CertPassLogo size={28} />
+            <span className="font-bold text-base tracking-tight">CertPass AI</span>
+            <span className="text-[11px] text-cp-faint ml-1 px-1.5 py-0.5 bg-cp-surface rounded border border-cp-border">
               정처기 실기
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#888' }}>
+          <div className="flex items-center gap-3 text-[13px] text-cp-muted">
             {totalCorrect > 0 && (
-              <span style={{ color: '#cc785c' }}>🔥 {totalCorrect}정답</span>
+              <span className="flex items-center gap-1 text-cp-accent">
+                <Flame size={14} />
+                {totalCorrect}정답
+              </span>
             )}
           </div>
         </div>
       </header>
 
-      {/* Tab Nav */}
-      <div
-        style={{
-          backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #2a2a2a',
-          padding: '0 20px',
-        }}
-      >
-        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', gap: 0 }}>
-          {[
-            { id: 'study', label: '📚 문제풀기' },
-            {
-              id: 'wrong',
-              label: `❌ 오답노트${wrongAnswers.length > 0 ? ` (${wrongAnswers.length})` : ''}`,
-            },
-          ].map((t) => (
+      {/* ── Tab Nav ── */}
+      <div className="bg-cp-bg border-b border-[#2a2a2a] px-5">
+        <div className="max-w-2xl mx-auto flex">
+          {TABS.map(({ id, label, Icon }) => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                padding: '12px 16px',
-                fontSize: 13,
-                fontWeight: tab === t.id ? 600 : 400,
-                color: tab === t.id ? '#cc785c' : '#666',
-                background: 'none',
-                border: 'none',
-                borderBottom: tab === t.id ? '2px solid #cc785c' : '2px solid transparent',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
+              key={id}
+              onClick={() => setTab(id)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-[13px] border-b-2 transition-all ${
+                tab === id
+                  ? 'font-semibold text-cp-accent border-cp-accent'
+                  : 'font-normal text-cp-faint border-transparent hover:text-cp-muted'
+              }`}
             >
-              {t.label}
+              <Icon size={14} />
+              {label}
+              {id === 'wrong' && wrongAnswers.length > 0 && (
+                <span className="text-[11px] text-cp-muted">({wrongAnswers.length})</span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      <main style={{ maxWidth: 720, margin: '0 auto', padding: '24px 20px' }}>
+      <main className="max-w-2xl mx-auto px-5 py-6">
 
         {/* ── 문제풀기 탭 ── */}
         {tab === 'study' && (
           <>
             {/* 회차 목록 */}
             {studyView === 'rounds' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="flex flex-col gap-4">
                 {/* 모드 토글 */}
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 0,
-                    padding: 3,
-                    borderRadius: 8,
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #333',
-                  }}
-                >
-                  {[
-                    { id: 'exam', label: '🎯 시험 모드', desc: '채점만' },
-                    { id: 'explain', label: '📖 해설 모드', desc: 'AI 10단계 해설' },
-                  ].map((m) => (
+                <div className="flex p-0.5 rounded-lg bg-cp-bg border border-cp-border">
+                  {MODES.map(({ id, label, desc, Icon }) => (
                     <button
-                      key={m.id}
-                      onClick={() => setStudyMode(m.id)}
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        fontSize: 13,
-                        fontWeight: studyMode === m.id ? 600 : 400,
-                        cursor: 'pointer',
-                        border: 'none',
-                        backgroundColor: studyMode === m.id ? '#cc785c' : 'transparent',
-                        color: studyMode === m.id ? '#fff' : '#666',
-                        transition: 'all 0.15s',
-                      }}
+                      key={id}
+                      onClick={() => setStudyMode(id)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-[13px] transition-all ${
+                        studyMode === id
+                          ? 'bg-cp-accent text-white font-semibold'
+                          : 'bg-transparent text-cp-faint hover:text-cp-muted'
+                      }`}
                     >
-                      {m.label}
-                      <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.8 }}>
-                        ({m.desc})
-                      </span>
+                      <Icon size={13} />
+                      {label}
+                      <span className="text-[11px] opacity-75">({desc})</span>
                     </button>
                   ))}
                 </div>
@@ -281,33 +208,20 @@ export default function CertPassAI() {
 
             {/* 문제 풀기 */}
             {studyView === 'question' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* 헤더: 뒤로가기 + 진행도 */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
+              <div className="flex flex-col gap-4">
+                {/* 진행도 헤더 */}
+                <div className="flex items-center justify-between">
                   <button
                     onClick={handleBackToRounds}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      cursor: 'pointer',
-                      backgroundColor: '#1a1a1a',
-                      border: '1px solid #333',
-                      color: '#888',
-                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[12px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
                   >
-                    ← 회차 목록
+                    <ChevronLeft size={12} />
+                    회차 목록
                   </button>
                   {totalQuestions > 0 && (
-                    <span style={{ fontSize: 13, color: '#666' }}>
+                    <span className="text-[13px] text-cp-faint">
                       {currentIndex + 1}{' '}
-                      <span style={{ color: '#444' }}>/ {totalQuestions}</span>
+                      <span className="text-[#444]">/ {totalQuestions}</span>
                     </span>
                   )}
                 </div>
@@ -321,7 +235,6 @@ export default function CertPassAI() {
                       sessionLabel={`${selectedSession.year}년 ${selectedSession.round}회`}
                       questionNumber={current.number}
                     />
-
                     <AnswerInput
                       value={userAnswer}
                       onChange={setUserAnswer}
@@ -334,7 +247,6 @@ export default function CertPassAI() {
                       onNext={handleNext}
                       nextLabel={isLastQuestion ? '결과 보기 →' : '다음 문제 →'}
                     />
-
                     {showExplanation && (
                       <ExplanationPanel
                         loading={aiLoading}
@@ -346,29 +258,11 @@ export default function CertPassAI() {
 
                 {/* 문제 없음 */}
                 {totalQuestions === 0 && (
-                  <div
-                    style={{
-                      textAlign: 'center',
-                      padding: '60px 20px',
-                      color: '#444',
-                      backgroundColor: '#262626',
-                      borderRadius: 12,
-                      border: '1px solid #333',
-                    }}
-                  >
-                    <p style={{ fontSize: 14 }}>해당 회차 문제가 없어요</p>
+                  <div className="text-center py-16 px-5 bg-cp-surface rounded-xl border border-cp-border">
+                    <p className="text-[14px] text-cp-faint">해당 회차 문제가 없어요</p>
                     <button
                       onClick={handleBackToRounds}
-                      style={{
-                        marginTop: 16,
-                        padding: '8px 16px',
-                        borderRadius: 8,
-                        fontSize: 13,
-                        cursor: 'pointer',
-                        backgroundColor: '#1a1a1a',
-                        border: '1px solid #333',
-                        color: '#888',
-                      }}
+                      className="mt-4 px-4 py-2 rounded-lg text-[13px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
                     >
                       돌아가기
                     </button>
@@ -379,81 +273,54 @@ export default function CertPassAI() {
 
             {/* 결과 화면 */}
             {studyView === 'results' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="flex flex-col gap-4">
                 {/* 점수 카드 */}
-                <div
-                  style={{
-                    textAlign: 'center',
-                    padding: '32px 20px',
-                    backgroundColor: '#262626',
-                    borderRadius: 12,
-                    border: '1px solid #333',
-                  }}
-                >
-                  <div
-                    style={{ fontSize: 56, fontWeight: 700, color: '#cc785c', lineHeight: 1 }}
-                  >
-                    {results.filter((r) => r.isCorrect).length}
+                <div className="text-center py-8 px-5 bg-cp-surface rounded-xl border border-cp-border">
+                  <div className="text-[56px] font-bold text-cp-accent leading-none">
+                    {totalCorrect}
                   </div>
-                  <div style={{ fontSize: 18, color: '#555', marginTop: 4 }}>
-                    / {results.length}
-                  </div>
-                  <div style={{ fontSize: 13, color: '#666', marginTop: 12 }}>
+                  <div className="text-lg text-cp-dimmed mt-1">/ {results.length}</div>
+                  <div className="text-[13px] text-cp-faint mt-3">
                     {selectedSession?.year}년 {selectedSession?.round}회 완료
                   </div>
                   <div
-                    style={{
-                      fontSize: 12,
-                      color:
-                        results.filter((r) => r.isCorrect).length / results.length >= 0.6
-                          ? '#4ade80'
-                          : '#f87171',
-                      marginTop: 6,
-                    }}
+                    className={`text-[13px] mt-2 flex items-center justify-center gap-1 ${
+                      passRate >= 0.6 ? 'text-cp-success' : 'text-cp-error'
+                    }`}
                   >
-                    {results.filter((r) => r.isCorrect).length / results.length >= 0.6
-                      ? '🎉 합격권!'
-                      : '📖 더 공부해봐요'}
+                    {passRate >= 0.6 ? (
+                      <><Trophy size={13} /> 합격권!</>
+                    ) : (
+                      <><BookOpen size={13} /> 더 공부해봐요</>
+                    )}
                   </div>
                 </div>
 
-                {/* 문제별 결과 목록 */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/* 문제별 결과 */}
+                <div className="flex flex-col gap-1.5">
                   {results.map((r, i) => (
                     <div
                       key={i}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 12,
-                        padding: '12px 14px',
-                        backgroundColor: '#262626',
-                        borderRadius: 8,
-                        border: `1px solid ${r.isCorrect ? '#4ade8022' : '#f8717122'}`,
-                      }}
+                      className={`flex items-start gap-3 px-3.5 py-3 bg-cp-surface rounded-lg border ${
+                        r.isCorrect ? 'border-cp-success/15' : 'border-cp-error/15'
+                      }`}
                     >
-                      <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>
-                        {r.isCorrect ? '✅' : '❌'}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 12, color: '#555', marginBottom: 3 }}>
+                      {r.isCorrect ? (
+                        <CheckCircle size={16} className="text-cp-success mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <XCircle size={16} className="text-cp-error mt-0.5 flex-shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] text-cp-dimmed mb-0.5">
                           {r.question.number}번
                         </p>
-                        <p
-                          style={{
-                            fontSize: 13,
-                            color: '#aaa',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
+                        <p className="text-[13px] text-cp-muted truncate">
                           {r.question.question}
                         </p>
                         {!r.isCorrect && (
-                          <p style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
+                          <p className="text-[12px] text-cp-muted mt-1">
                             정답:{' '}
-                            <span style={{ color: '#4ade80' }}>
+                            <span className="text-cp-success">
                               {r.question.answer.split('\n')[0]}
                             </span>
                           </p>
@@ -464,37 +331,18 @@ export default function CertPassAI() {
                 </div>
 
                 {/* 액션 버튼 */}
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="flex gap-2">
                   <button
                     onClick={handleBackToRounds}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      borderRadius: 8,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      backgroundColor: '#262626',
-                      border: '1px solid #333',
-                      color: '#ececec',
-                      fontWeight: 500,
-                    }}
+                    className="flex-1 px-4 py-3 rounded-lg text-[13px] font-medium bg-cp-surface border border-cp-border text-cp-primary hover:border-cp-muted transition-colors"
                   >
                     다른 회차 풀기
                   </button>
                   <button
                     onClick={() => handleSessionSelect(selectedSession)}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      borderRadius: 8,
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      backgroundColor: '#cc785c',
-                      border: 'none',
-                      color: '#fff',
-                      fontWeight: 600,
-                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg text-[13px] font-semibold bg-cp-accent text-white hover:bg-cp-accent-light transition-colors"
                   >
+                    <RefreshCw size={13} />
                     다시 풀기
                   </button>
                 </div>
@@ -505,19 +353,21 @@ export default function CertPassAI() {
 
         {/* ── 오답노트 탭 ── */}
         {tab === 'wrong' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="flex flex-col gap-3">
             {wrongAnswers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: '#444' }}>
-                <p style={{ fontSize: 40 }}>🎉</p>
-                <p style={{ fontSize: 16, color: '#666', marginTop: 12 }}>오답이 없어요!</p>
-                <p style={{ fontSize: 13, color: '#444', marginTop: 6 }}>
+              <div className="text-center py-16 px-5">
+                <div className="flex justify-center">
+                  <Trophy size={40} className="text-cp-border" />
+                </div>
+                <p className="text-base text-cp-faint mt-4">오답이 없어요!</p>
+                <p className="text-[13px] text-[#444] mt-1.5">
                   계속 풀다 보면 여기에 모입니다.
                 </p>
               </div>
             ) : (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, color: '#666' }}>
+                <div className="flex justify-between items-center">
+                  <span className="text-[13px] text-cp-faint">
                     총 {wrongAnswers.length}개의 오답
                   </span>
                 </div>
@@ -525,61 +375,32 @@ export default function CertPassAI() {
                 {wrongAnswers.map((w) => (
                   <div
                     key={w.id}
-                    style={{
-                      backgroundColor: '#262626',
-                      borderRadius: 12,
-                      padding: 20,
-                      border: '1px solid #f8717122',
-                    }}
+                    className="bg-cp-surface rounded-xl p-5 border border-cp-error/15"
                   >
-                    <p style={{ fontSize: 14, color: '#ddd', lineHeight: 1.7, marginBottom: 12 }}>
+                    <p className="text-[14px] text-[#ddd] leading-relaxed mb-3">
                       {w.question}
                     </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          backgroundColor: '#f8717111',
-                          border: '1px solid #f8717133',
-                          color: '#f87171',
-                        }}
-                      >
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-[12px] px-2.5 py-1.5 rounded-md bg-cp-error/10 border border-cp-error/20 text-cp-error">
                         내 답변: {w.myAnswer}
                       </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          padding: '6px 10px',
-                          borderRadius: 6,
-                          backgroundColor: '#4ade8011',
-                          border: '1px solid #4ade8033',
-                          color: '#4ade80',
-                        }}
-                      >
+                      <div className="text-[12px] px-2.5 py-1.5 rounded-md bg-cp-success/10 border border-cp-success/20 text-cp-success">
                         정답: {w.answer}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <div className="flex gap-2 mt-3">
                       {!w.reviewed ? (
                         <button
                           onClick={() => markReviewed(w.id)}
-                          style={{
-                            padding: '7px 14px',
-                            borderRadius: 8,
-                            fontSize: 12,
-                            cursor: 'pointer',
-                            backgroundColor: '#1a1a1a',
-                            border: '1px solid #4ade8044',
-                            color: '#4ade80',
-                          }}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] bg-cp-bg border border-cp-success/30 text-cp-success hover:border-cp-success/60 transition-colors"
                         >
-                          ✅ 복습 완료
+                          <Check size={12} />
+                          복습 완료
                         </button>
                       ) : (
-                        <span style={{ padding: '7px 10px', fontSize: 12, color: '#4ade80' }}>
-                          ✅ 복습됨
+                        <span className="flex items-center gap-1.5 text-[12px] text-cp-success px-2.5 py-1.5">
+                          <CheckCircle size={12} />
+                          복습됨
                         </span>
                       )}
                     </div>
@@ -590,15 +411,6 @@ export default function CertPassAI() {
           </div>
         )}
       </main>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50% { opacity: 1; transform: scale(1); }
-        }
-        textarea:focus { border-color: #cc785c !important; box-shadow: 0 0 0 2px #cc785c22; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-      `}</style>
     </div>
   );
 }

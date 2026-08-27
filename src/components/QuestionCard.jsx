@@ -1,97 +1,43 @@
+import { Lightbulb } from 'lucide-react';
+
 export default function QuestionCard({ question, showHint, sessionLabel, questionNumber }) {
   if (!question) return null;
   return (
-    <div
-      className="cp-question-card cp-fade-in"
-      style={{ backgroundColor: '#262626', borderRadius: 12, padding: 24, border: '1px solid #333' }}
-    >
-      {/* 뱃지 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div className="cp-fade-in bg-cp-surface rounded-xl p-6 border border-cp-border">
+      {/* Badges */}
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
         {sessionLabel && (
-          <span
-            style={{
-              fontSize: 11,
-              padding: '3px 8px',
-              borderRadius: 20,
-              backgroundColor: '#cc785c22',
-              color: '#cc785c',
-              border: '1px solid #cc785c44',
-            }}
-          >
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-accent/10 text-cp-accent border border-cp-accent/30">
             {sessionLabel}
           </span>
         )}
         {questionNumber != null && (
-          <span
-            style={{
-              fontSize: 11,
-              padding: '3px 8px',
-              borderRadius: 20,
-              backgroundColor: '#1a1a1a',
-              color: '#888',
-              border: '1px solid #333',
-            }}
-          >
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-bg text-cp-muted border border-cp-border">
             {questionNumber}번
           </span>
         )}
-        <span
-          style={{
-            fontSize: 11,
-            padding: '3px 8px',
-            borderRadius: 20,
-            backgroundColor: '#1a1a1a',
-            color: '#888',
-            border: '1px solid #333',
-          }}
-        >
+        <span className="text-[11px] px-2 py-0.5 rounded-full bg-cp-bg text-cp-muted border border-cp-border">
           {question.type}
         </span>
       </div>
 
-      {/* 문제 본문 */}
-      <p
-        className="cp-question-body"
-        style={{ fontSize: 15, lineHeight: 1.8, color: '#ddd', whiteSpace: 'pre-line' }}
-      >
+      {/* Question text */}
+      <p className="text-[15px] leading-relaxed text-[#ddd] whitespace-pre-line">
         {question.question}
       </p>
 
-      {/* 코드 블록 */}
+      {/* Code block */}
       {question.code && (
-        <pre
-          style={{
-            marginTop: 16,
-            padding: '16px',
-            backgroundColor: '#1a1a1a',
-            borderRadius: 8,
-            border: '1px solid #333',
-            fontSize: 13,
-            color: '#e8906f',
-            overflowX: 'auto',
-            lineHeight: 1.6,
-            fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-            whiteSpace: 'pre',
-          }}
-        >
+        <pre className="mt-4 p-4 bg-cp-bg rounded-lg border border-cp-border text-[13px] text-cp-accent-light overflow-x-auto leading-relaxed font-mono whitespace-pre">
           {question.code}
         </pre>
       )}
 
-      {/* 힌트 */}
+      {/* Hint */}
       {showHint && question.hint && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: '10px 14px',
-            backgroundColor: '#fbbf2411',
-            borderRadius: 8,
-            border: '1px solid #fbbf2433',
-            fontSize: 13,
-            color: '#fbbf24',
-          }}
-        >
-          💡 {question.hint}
+        <div className="mt-4 p-3 bg-cp-warning/10 rounded-lg border border-cp-warning/30 text-[13px] text-cp-warning flex items-start gap-2">
+          <Lightbulb size={14} className="mt-0.5 flex-shrink-0" />
+          {question.hint}
         </div>
       )}
     </div>
