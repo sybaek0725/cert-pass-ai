@@ -12,17 +12,17 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #cc785c;
+  background: #46b450;
   animation: cp-pulse 1s infinite;
 }
 
 /* ── 마크다운 ────────────────────────────────────────── */
 .cp-markdown p { margin: 0 0 8px; }
-.cp-markdown strong { color: #ececec; }
-.cp-markdown code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-.cp-markdown h3 { color: #ececec; font-size: 14px; margin: 12px 0 6px; }
+.cp-markdown strong { color: #3c3c3c; }
+.cp-markdown code { background: #f7f7f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+.cp-markdown h3 { color: #3c3c3c; font-size: 14px; margin: 12px 0 6px; }
 .cp-markdown ul { padding-left: 18px; margin: 6px 0; }
-.cp-markdown blockquote { border-left: 2px solid #cc785c; padding-left: 10px; color: #fbbf24; margin: 8px 0; }
+.cp-markdown blockquote { border-left: 2px solid #46b450; padding-left: 10px; color: #dca400; margin: 8px 0; }
 
 /* ── 베이스 ──────────────────────────────────────────── */
 html,
@@ -30,8 +30,8 @@ body,
 #root {
   margin: 0;
   min-height: 100vh;
-  background: #1a1a1a;
-  color: #ececec;
+  background: #ffffff;
+  color: #3c3c3c;
   font-family: 'Noto Sans KR', system-ui, -apple-system, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
@@ -40,19 +40,25 @@ body,
   box-sizing: border-box;
 }
 
-/* ── 인터랙션: 버튼 ─────────────────────────────────── */
+/* ── 인터랙션: 버튼(듀오링고식 입체 버튼) ─────────────── */
 button {
-  font-family: inherit;
-  transition: transform 0.1s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-}
-button:not(:disabled):hover {
-  opacity: 0.92;
+  font-family: 'Baloo 2', inherit;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 button:not(:disabled):active {
-  transform: scale(0.97);
+  transform: translateY(2px);
 }
 button:disabled {
   cursor: default;
+}
+
+/* 하단 그림자가 있는 버튼(제출/다음 등 CTA)에 적용 — className="cp-btn-raised" */
+.cp-btn-raised {
+  box-shadow: 0 4px 0 var(--cp-btn-shadow, #2f9440);
+}
+.cp-btn-raised:not(:disabled):active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--cp-btn-shadow, #2f9440);
 }
 
 /* 텍스트입력 포커스 */
@@ -60,8 +66,8 @@ textarea, input {
   font-family: inherit;
 }
 textarea:focus, input:focus {
-  border-color: #cc785c !important;
-  box-shadow: 0 0 0 2px #cc785c33;
+  border-color: #46b450 !important;
+  box-shadow: 0 0 0 2px #46b45033;
 }
 
 /* ── 카드 페이드 인 ─────────────────────────────────── */
@@ -95,6 +101,6 @@ textarea:focus, input:focus {
 /* ── 접근성: 키보드 포커스 ─────────────────────────── */
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid #cc785c;
+  outline: 2px solid #46b450;
   outline-offset: 2px;
 }
