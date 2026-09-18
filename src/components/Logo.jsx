@@ -10,8 +10,8 @@ export function CertPassLogo({ size = 28, className = '' }) {
     >
       <defs>
         <linearGradient id="cp-grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#cc785c" />
-          <stop offset="1" stopColor="#e8906f" />
+          <stop stopColor="#46b450" />
+          <stop offset="1" stopColor="#6bd66f" />
         </linearGradient>
       </defs>
 
@@ -25,8 +25,8 @@ export function CertPassLogo({ size = 28, className = '' }) {
       <rect x="10" y="17" width="6" height="1.5" rx="0.75" fill="white" fillOpacity="0.65" />
 
       {/* Pass badge (bottom-right) */}
-      <circle cx="23" cy="24" r="5.5" fill="#1a1a1a" />
-      <circle cx="23" cy="24" r="4.5" fill="#4ade80" />
+      <circle cx="23" cy="24" r="5.5" fill="#ffffff" />
+      <circle cx="23" cy="24" r="4.5" fill="#2f9440" />
       <path
         d="M20.8 24L22.4 25.7L25.2 22.3"
         stroke="white"

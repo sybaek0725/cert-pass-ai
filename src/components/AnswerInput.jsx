@@ -14,80 +14,91 @@ export default function AnswerInput({
 }) {
   return (
     <div
-      className={`bg-cp-surface rounded-xl p-5 border transition-colors ${
+      className={`bg-cp-surface rounded-2xl border-2 transition-colors overflow-hidden ${
         submitted
           ? isCorrect
-            ? 'border-cp-success/35'
-            : 'border-cp-error/35'
+            ? 'border-cp-success'
+            : 'border-cp-error'
           : 'border-cp-border'
       }`}
     >
-      <label className="text-[12px] text-cp-faint mb-2 block">내 답변</label>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={submitted}
-        placeholder="답을 입력하세요..."
-        className="w-full min-h-[80px] bg-cp-bg border border-cp-border rounded-lg px-3 py-2.5 text-cp-primary text-[14px] resize-y outline-none focus:border-cp-accent transition-colors disabled:opacity-60 placeholder:text-cp-dimmed"
-      />
+      <div className="p-5 pb-0">
+        <label className="text-[12px] font-bold text-cp-faint mb-2 block">내 답변</label>
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={submitted}
+          placeholder="답을 입력하세요..."
+          className="w-full min-h-[80px] bg-white border-2 border-cp-border rounded-xl px-3 py-2.5 text-cp-primary text-[14px] resize-y outline-none focus:border-cp-accent transition-colors disabled:opacity-90 placeholder:text-cp-dimmed"
+        />
+      </div>
 
-      {submitted && (
+      {submitted ? (
         <div
-          className={`mt-3 px-3.5 py-2.5 rounded-lg border ${
+          className={`mt-4 p-5 border-t-2 ${
             isCorrect
-              ? 'bg-cp-success/5 border-cp-success/25'
-              : 'bg-cp-error/5 border-cp-error/25'
+              ? 'bg-cp-success/10 border-cp-success/30'
+              : 'bg-cp-error/10 border-cp-error/30'
           }`}
         >
           <p
-            className={`text-[13px] font-semibold flex items-center gap-1.5 ${
-              isCorrect ? 'text-cp-success' : 'text-cp-error'
+            className={`font-display text-[15px] font-bold flex items-center gap-2 ${
+              isCorrect ? 'text-cp-accent-dark' : 'text-cp-error'
             }`}
           >
             {isCorrect ? (
-              <><CheckCircle size={14} /> 정답입니다!</>
+              <>
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cp-accent text-white flex-shrink-0">
+                  <CheckCircle size={15} />
+                </span>
+                정답입니다! +10 XP
+              </>
             ) : (
-              <><XCircle size={14} /> 오답입니다</>
+              <>
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cp-error text-white flex-shrink-0">
+                  <XCircle size={15} />
+                </span>
+                아쉬워요, 오답이에요
+              </>
             )}
           </p>
-          <p className="text-[13px] text-cp-muted mt-1">
-            정답: <span className="text-cp-primary font-semibold">{correctAnswer}</span>
+          <p className="text-[13px] text-cp-muted mt-2">
+            정답: <span className="text-cp-primary font-bold">{correctAnswer}</span>
           </p>
-        </div>
-      )}
 
-      <div className="flex gap-2 mt-3">
-        {!submitted ? (
-          <>
-            <button
-              onClick={onToggleHint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] bg-cp-bg border border-cp-border text-cp-muted hover:border-cp-accent/50 transition-colors"
-            >
-              <Lightbulb size={13} />
-              {showHint ? '힌트 숨기기' : '힌트'}
-            </button>
-            <button
-              onClick={onSubmit}
-              disabled={!value.trim()}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all ${
-                value.trim()
-                  ? 'bg-cp-accent text-white hover:bg-cp-accent-light'
-                  : 'bg-cp-border text-cp-dimmed cursor-not-allowed'
-              }`}
-            >
-              <Send size={13} />
-              제출하기
-            </button>
-          </>
-        ) : (
           <button
             onClick={onNext}
-            className="flex-1 px-4 py-2 rounded-lg text-[13px] font-semibold bg-cp-accent text-white hover:bg-cp-accent-light transition-colors"
+            className="cp-btn-raised w-full mt-3 px-4 py-3 rounded-2xl text-[14px] font-display font-bold bg-cp-accent text-white hover:opacity-95 transition-opacity"
+            style={{ '--cp-btn-shadow': '#2f9440' }}
           >
             {nextLabel}
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex gap-2 p-5 pt-3">
+          <button
+            onClick={onToggleHint}
+            className="cp-btn-raised flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-[13px] font-display font-bold bg-white border-2 border-cp-blue text-cp-blue-dark"
+            style={{ '--cp-btn-shadow': '#e5e5e5' }}
+          >
+            <Lightbulb size={13} />
+            {showHint ? '힌트 숨기기' : '힌트'}
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={!value.trim()}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-[13px] font-display font-bold transition-all ${
+              value.trim()
+                ? 'cp-btn-raised bg-cp-accent text-white'
+                : 'bg-cp-hover text-cp-dimmed cursor-not-allowed'
+            }`}
+            style={value.trim() ? { '--cp-btn-shadow': '#2f9440' } : undefined}
+          >
+            <Send size={13} />
+            제출하기
+          </button>
+        </div>
+      )}
     </div>
   );
 }

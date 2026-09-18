@@ -1,4 +1,4 @@
-import { ChevronRight, Inbox } from 'lucide-react';
+import { Inbox } from 'lucide-react';
 import { getSessionList } from '../data/examQuestions';
 
 export default function YearRoundList({ onSelect }) {
@@ -20,7 +20,7 @@ export default function YearRoundList({ onSelect }) {
           <Inbox size={40} className="text-cp-border" />
         </div>
         <p className="text-[14px] text-cp-faint mt-3">기출 데이터가 없어요</p>
-        <p className="text-[12px] text-[#444] mt-1.5">
+        <p className="text-[12px] text-cp-faint mt-1.5">
           src/data/examQuestions.js에 문제를 추가해주세요
         </p>
       </div>
@@ -28,27 +28,35 @@ export default function YearRoundList({ onSelect }) {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       {years.map((year) => (
         <div key={year}>
-          <div className="text-[12px] font-semibold text-cp-dimmed mb-2 tracking-wide">
+          <div className="text-[12px] font-display font-bold text-cp-faint mb-2 tracking-wide">
             {year}년
           </div>
-          <div className="flex flex-col gap-1.5">
-            {grouped[year].map(({ round, count }) => (
-              <button
-                key={round}
-                onClick={() => onSelect({ year: Number(year), round })}
-                className="group px-4 py-3.5 bg-cp-surface border border-cp-border rounded-lg text-cp-primary text-[14px] text-left flex justify-between items-center hover:border-cp-accent transition-colors"
-              >
-                <span className="font-medium">
-                  {year}년 {round}회 기출
-                </span>
-                <span className="flex items-center gap-1 text-[12px] text-cp-dimmed group-hover:text-cp-muted transition-colors">
-                  {count}문제
-                  <ChevronRight size={12} />
-                </span>
-              </button>
+          <div className="flex flex-col">
+            {grouped[year].map(({ round, count }, i) => (
+              <div key={round}>
+                <button
+                  onClick={() => onSelect({ year: Number(year), round })}
+                  className="group w-full py-1.5 flex items-center gap-3.5 text-left"
+                >
+                  <span className="cp-btn-raised flex-shrink-0 w-12 h-12 rounded-full bg-cp-accent text-white font-display font-extrabold text-[15px] flex items-center justify-center" style={{ '--cp-btn-shadow': '#2f9440' }}>
+                    {round}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-display font-bold text-[14px] text-cp-primary">
+                      {year}년 {round}회 기출
+                    </span>
+                    <span className="block text-[12px] text-cp-faint mt-0.5">
+                      {count}문제
+                    </span>
+                  </span>
+                </button>
+                {i < grouped[year].length - 1 && (
+                  <div className="w-0.5 h-4 bg-cp-border ml-6" />
+                )}
+              </div>
             ))}
           </div>
         </div>
