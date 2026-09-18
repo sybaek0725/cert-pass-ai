@@ -3,8 +3,8 @@ import ReactMarkdown from 'react-markdown';
 
 export default function ExplanationPanel({ loading, text }) {
   return (
-    <div className="cp-fade-in bg-cp-surface rounded-xl p-5 border border-cp-border">
-      <p className="text-[12px] text-cp-accent font-semibold mb-3 flex items-center gap-1.5">
+    <div className="cp-fade-in bg-cp-blue/5 rounded-2xl p-5 border-2 border-cp-blue/25">
+      <p className="text-[12px] text-cp-blue-dark font-display font-bold mb-3 flex items-center gap-1.5">
         <Bot size={13} />
         AI 해설
       </p>
@@ -16,7 +16,7 @@ export default function ExplanationPanel({ loading, text }) {
           <span className="ml-1">해설 생성 중...</span>
         </div>
       ) : (
-        <div className="text-[14px] text-[#ccc] leading-relaxed cp-markdown">
+        <div className="text-[14px] text-cp-primary leading-relaxed cp-markdown">
           <ReactMarkdown>{text || ''}</ReactMarkdown>
         </div>
       )}

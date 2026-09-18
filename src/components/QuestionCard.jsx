@@ -3,7 +3,7 @@ import { Lightbulb } from 'lucide-react';
 export default function QuestionCard({ question, showHint, sessionLabel, questionNumber }) {
   if (!question) return null;
   return (
-    <div className="cp-fade-in bg-cp-surface rounded-xl p-6 border border-cp-border">
+    <div className="cp-fade-in bg-cp-surface rounded-2xl p-6 border-2 border-cp-border">
       {/* Badges */}
       <div className="flex gap-2 mb-4 flex-wrap items-center">
         {sessionLabel && (
@@ -22,13 +22,13 @@ export default function QuestionCard({ question, showHint, sessionLabel, questio
       </div>
 
       {/* Question text */}
-      <p className="text-[15px] leading-relaxed text-[#ddd] whitespace-pre-line">
+      <p className="text-[15px] leading-relaxed text-cp-primary whitespace-pre-line">
         {question.question}
       </p>
 
       {/* Code block */}
       {question.code && (
-        <pre className="mt-4 p-4 bg-cp-bg rounded-lg border border-cp-border text-[13px] text-cp-accent-light overflow-x-auto leading-relaxed font-mono whitespace-pre">
+        <pre className="mt-4 p-4 bg-[#2d2d28] rounded-lg border border-cp-border text-[13px] text-[#b7e5bb] overflow-x-auto leading-relaxed font-mono whitespace-pre">
           {question.code}
         </pre>
       )}
